@@ -138,7 +138,7 @@ class GameState:
             self.setMode(mode)
 
     def generateRandomName(self):
-        parts = ["Zorp", "Glar", "Flux", "Kryll", "Vex", "Nebu", "Xylo", "Quantum", "Hyper", "Void"]
+        parts = ["Zorp", "Glar", "Fluxx", "Kryll", "Vex", "Nebu", "Xylo", "Quantum", "Hyper", "Void"]
         return random.choice(parts) + str(random.randint(100, 999))
 
     def initBackground(self):
