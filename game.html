@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>DOC Pixel - Advanced Retro Intro (Fixed)</title>
+    <style>
+        body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #000; color: #0ff; font-family: monospace; font-size: 12px; line-height: 1; }
+        #gameArea {
+            white-space: pre;
+            background-color: #001;
+            padding: 10px;
+            border: 2px solid #0af;
+            overflow: hidden;
+            position: relative;
+            width: calc(12px * 80 + 20px);
+            height: calc(12px * 30 + 20px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            text-align: center;
+        }
+        .menu-item { cursor: pointer; padding: 3px 0; margin: 1px 0; display: inline-block; }
+        .menu-item.selected { background-color: #0ff; color: #000; padding-left:5px; padding-right:5px; }
+        .title-text { color: #FFD700; font-weight: bold; font-size: 1.5em; text-shadow: 1px 1px #FF8C00; }
+        .figlet-title-char { display: inline-block; opacity: 0; transition: opacity 0.05s; }
+        .placeholder-text { color: #7FFF00; }
+        .hyperspace-text { color: #ADD8E6; }
+        .incoming-transmission-line { opacity: 0; transition: opacity 0.5s; display: block; }
+        .menu-header { color: #FFA500; margin-bottom: 10px; font-weight: bold; font-size: 1.2em; }
+
+        .vj-v { color: #FF00FF; } .vj-j { color: #00FFFF; } .vj-b { color: #FFFF00; }
+        .vj-l { color: #00FF00; } .vj-i { color: #FFA500; } .vj-n { color: #FF4500; }
+        .vj-c { color: #1E90FF; } .vj-slogan { color: #CCCCCC; font-size: 0.9em;}
+
+        .world-select-container { display: flex; justify-content: space-around; align-items: flex-start; width: 100%; }
+        .world-option { padding: 10px; border: 1px solid transparent; text-align: center; }
+        .world-option.selected { border: 1px dashed #FFD700; background-color: rgba(255,215,0,0.1); }
+        .world-art { margin-bottom: 5px; color: #33FF33; }
+        .world-name { font-weight: bold; color: #FFA500; }
+        .menu-background-char { position: absolute; opacity: 0.2; color: #055; z-index: -1; }
+         /* CSS for fadeIn for transmission lines */
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <div id="gameArea">Initializing Advanced Intro Sequence...</div>
+
+    <script>
+        const gameArea = document.getElementById('gameArea');
+        const GAME_WIDTH_CHARS = 80;
+        const GAME_HEIGHT_LINES = 30;
+
+        const ASCII_ART_INTRO = {
+            figletTitle: [
+                "    ,---,                                                                           ,--,    ",
+                "  .'  .' `\\                              ,-.----.    ,--,                         ,--.'|    ",
+                ",---.'     \\    ,---.                    \\    /  \\ ,--.'|                         |  | :    ",
+                "|   |  .`\\  |  '   ,'\\                   |   :    ||  |,     ,--,  ,--,           :  : '    ",
+                ":   : |  '  | /   /   |   ,---.          |   | .\\ :`--'_     |'. \\/ .`|    ,---.  |  ' |    ",
+                "|   ' '  ;  :.   ; ,. :  /     \\         .   : |: |,' ,'|    '  \\/  / ;   /     \\ '  | |    ",
+                "'   | ;  .  |'   | |: : /    / '         |   |  \\ :'  | |     \\  \\.' /   /    /  ||  | :    ",
+                "|   | :  |  ''   | .; :.    ' /          |   : .  ||  | :      \\  ;  ;  .    ' / |'  : |__  ",
+                "'   : | /  ; |   :    |'   ; :__         :     |`-''  : |__   / \\  \\  \\ '   ;   /||  | '.'| ",
+                "|   | '` ,/   \\   \\  / '   | '.'|        :   : :   |  | '.'|./__;   ;  \\'   |  / |;  :    ; ",
+                ";   :  .'      `----'  |   :    :        |   | :   ;  :    ;|   :/\  \ ;|   :    ||  ,   /  ",
+                "|   ,.'                 \\   \\  /         `---'.|   |  ,   / `---'  `--`  \\   \\  /  ---`-'   ",
+                "'---'                    `----'            `---`    ---`-'                `----'            "
+            ],
+            originalTitle: [ // The previous, simpler title
+                "    DDDD    OOOOO   CCCCCCC  PPPPPP  IIIIIII XXXXXXX XXXXXXX EEEEEEE LLLLL       ",
+                "    D   D  O     O C         P     P    I       X       X    E       L           ",
+                "    D   D  O     O C         PPPPPP     I       X       X    EEEEEEE L           ",
+                "    D   D  O     O C         P          I       X       X    E       L           ",
+                "    DDDD    OOOOO   CCCCCCC  P       IIIIIII    X       X    EEEEEEE LLLLLLL     "
+            ],
+            placeholder1_loading: [
+                "................................................................................",
+                ".                                                                              .",
+                ".                      SYSTEM BOOT SEQUENCE INITIATED                          .",
+                ".                                                                              .",
+                ".      [▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓] 100%               .",
+                ".                                                                              .",
+                ".                       CORE SYSTEMS ONLINE. AWAITING COMMAND.                 .",
+                ".                                                                              .",
+                "................................................................................"
+            ],
+            vjBlindIncLogo: [
+                "                                                                                ",
+                "                            VV   VV JJJJJJ BBBBB L     IIII NN   NN  CCCCC        ",
+                "                            VV   VV   JJ   B   B L      II  NNN  NN C              ",
+                "                             VV VV    JJ   BBBB  L      II  NN N NN C              ",
+                "                              VVV   JJJJ   B   B L      II  NN  NNN C              ",
+                "                               V     JJ    BBBBB LLLLL IIII NN   NN  CCCCC        ",
+                "                                                                                ",
+                "                             - Creative ASCII Solutions -                         ",
+                "                                                                                "
+            ],
+            placeholder3_gameTeaser: [
+                " ",
+                "                             >>> PROCESSING INCOMING TRANSMISSION <<<",
+                " ",
+                "                             SUBJECT: URGENT - MULTIPLE THREATS DETECTED",
+                "                             PRIORITY: CRITICAL",
+                "                             SOURCE: GALACTIC FEDERATION HQ",
+                " ",
+                "                             DETAILS FOLLOW:",
+                "                                  -UNKNOWN ENTITIES IN SECTOR GAMMA-7",
+                "                                  -MASSIVE ENERGY SIGNATURES IN METROPOLIS ZONE",
+                "                                  -ILLEGAL HIGH-SPEED VEHICLES ON PROHIBITED ROUTES",
+                " ",
+                "                             PILOT, YOUR IMMEDIATE ACTION IS REQUIRED!",
+                "                             PREPARE FOR DEPLOYMENT!",
+                " "
+            ],
+            menuBackground: [],
+            world_space: [ "    .--\"\"--.    ", "   /        \\   ", "  |  o  o   |  ", "  \\  `----'  /  ", "   `.____.'    ", "    ||    ||    ", "   火焰火焰   " ],
+            world_city: [ "  _______________  ", " |[][][][][][][]| ", " |[]           []| ", " |[][] __________ ", " |[][]|  __  |[][]|", " |[][]| |  | |[][]|", "-------------------" ],
+            world_racing: [ "      .--\"\"--.    ", "     /＿＿＿＿\\   ", "    | RAPID  |   ", "    (●)----(●)   ", "   // WWWWWW \\\\  ", "  //__________\\\\ ", " `--------------`" ]
+        };
+
+        let currentScreen = 'init';
+
+        let hyperspaceState = {
+            particles: [],
+            duration: 2000, // ms (Reduced duration)
+            elapsed: 0,
+            intervalId: null,
+            numParticles: 180, // Slightly more particles
+            center_x: GAME_WIDTH_CHARS / 2,
+            center_y: GAME_HEIGHT_LINES / 2,
+            max_radius: Math.max(GAME_WIDTH_CHARS / 2, GAME_HEIGHT_LINES / 2) * 1.3,
+            animationIntervalTime: 30 // ms (Faster updates)
+        };
+
+        let originalTitleState = { lineIndex: 0, charIndex: 0, linesToShow: [] }; // Initialized before use
+        const ORIGINAL_TITLE_ANIM_SPEED_MS = 10; // Speed for original title animation
+        const ORIGINAL_TITLE_HOLD_MS = 1000;
+
+        const PLACEHOLDER_HOLD_MS = 2500;
+        let transmissionState = { lines: [], currentLineIndex: 0, shownLines: [] };
+        const TRANSMISSION_LINE_DELAY_MS = 300;
+
+        let menuItems = ["Engage Targets", "System Config", "Abort Mission"];
+        let selectedMenuItemIndex = 0;
+
+        const worldData = [
+            { name: "Hostile Sector", art: ASCII_ART_INTRO.world_space, script: 'space', description: "Engage alien threats in deep space. NAVIGATES TO world1.html" },
+            { name: "Urban Annihilation", art: ASCII_ART_INTRO.world_city, script: 'city', description: "Neutralize kaiju-level city destroyers." },
+            { name: "Velocity Challenge", art: ASCII_ART_INTRO.world_racing, script: 'racing', description: "Dominate high-speed illegal street races." },
+            { name: "Return to Briefing", art: [" ", "  [ BACK ]", " "], script: 'back', description: "Go back to main menu."}
+        ];
+        let selectedWorldIndex = 0;
+
+        function clearGameArea() { gameArea.innerHTML = ''; }
+
+        function padArt(artArray, targetWidth = GAME_WIDTH_CHARS, targetHeight = -1) {
+            const newArt = [];
+            const heightToUse = targetHeight === -1 ? artArray.length : targetHeight;
+            for (let i = 0; i < heightToUse; i++) {
+                if (i < artArray.length) {
+                    newArt.push(artArray[i].padEnd(targetWidth).substring(0, targetWidth));
+                } else {
+                    newArt.push(" ".repeat(targetWidth));
+                }
+            }
+            return newArt;
+        }
+
+        function generateMenuBackground() {
+            ASCII_ART_INTRO.menuBackground = [];
+            for (let i = 0; i < GAME_HEIGHT_LINES; i++) {
+                let line = "";
+                for (let j = 0; j < GAME_WIDTH_CHARS; j++) {
+                    if (Math.random() < 0.015) { line += Math.random() < 0.5 ? "." : "*"; }
+                    else { line += " "; }
+                }
+                ASCII_ART_INTRO.menuBackground.push(line);
+            }
+        }
+        generateMenuBackground();
+
+        function renderMenuBackground() {
+            const bgContainer = document.createElement('div');
+            bgContainer.style.position = 'absolute';
+            bgContainer.style.top = '10px'; bgContainer.style.left = '10px'; // Match gameArea padding
+            bgContainer.style.zIndex = '-1'; bgContainer.style.color = '#033';
+            bgContainer.style.opacity = '0.5';
+            bgContainer.innerHTML = ASCII_ART_INTRO.menuBackground.join('\n');
+            if (gameArea.firstChild && gameArea.firstChild.nodeName !== '#text') {
+                gameArea.insertBefore(bgContainer, gameArea.firstChild);
+            } else {
+                gameArea.appendChild(bgContainer);
+            }
+        }
+
+        function renderAscii(artArray, className = '', useInnerHTML = false, rawContent = null) {
+            clearGameArea();
+            const container = document.createElement('div');
+            if (className) container.className = className;
+            if (rawContent) { container.innerHTML = rawContent; }
+            else if (useInnerHTML) { container.innerHTML = artArray.join('\n'); }
+            else { container.textContent = artArray.join('\n'); }
+            gameArea.appendChild(container);
+        }
+
+        function initHyperspaceParticles() {
+            hyperspaceState.particles = [];
+            for (let i = 0; i < hyperspaceState.numParticles; i++) {
+                hyperspaceState.particles.push(createHyperspaceParticle(true));
+            }
+        }
+        function createHyperspaceParticle(isInitial = false) {
+            const angle = Math.random() * 2 * Math.PI;
+            const speed = 1.0 + Math.random() * 2.5; // Increased speed
+            const currentRadius = isInitial ? Math.random() * hyperspaceState.max_radius : 0.1;
+            return { angle, speed, currentRadius };
+        }
+        function updateAndRenderHyperspace() {
+            let frameBuffer = Array(GAME_HEIGHT_LINES).fill(null).map(() => Array(GAME_WIDTH_CHARS).fill(' '));
+            hyperspaceState.particles.forEach(p => {
+                p.currentRadius += p.speed;
+                if (p.currentRadius > hyperspaceState.max_radius) {
+                    Object.assign(p, createHyperspaceParticle(false));
+                }
+                let charToDraw;
+                if (p.currentRadius > hyperspaceState.max_radius * 0.85) charToDraw = '+';
+                else if (p.currentRadius > hyperspaceState.max_radius * 0.6) charToDraw = '*';
+                else if (p.currentRadius > hyperspaceState.max_radius * 0.3) charToDraw = ':';
+                else charToDraw = '.';
+
+                const x = hyperspaceState.center_x + Math.cos(p.angle) * p.currentRadius;
+                const y = hyperspaceState.center_y + Math.sin(p.angle) * p.currentRadius * 0.5;
+
+                const screenX = Math.floor(x); const screenY = Math.floor(y);
+                if (screenX >= 0 && screenX < GAME_WIDTH_CHARS && screenY >= 0 && screenY < GAME_HEIGHT_LINES) {
+                    frameBuffer[screenY][screenX] = charToDraw;
+                }
+            });
+            renderAscii(frameBuffer.map(row => row.join('')), 'hyperspace-text');
+            hyperspaceState.elapsed += hyperspaceState.animationIntervalTime;
+            if (hyperspaceState.elapsed >= hyperspaceState.duration) {
+                console.log("Hyperspace animation complete. Transitioning to FIGlet title.");
+                clearInterval(hyperspaceState.intervalId);
+                hyperspaceState.intervalId = null; // Important to clear
+                // --- MODIFIED: Skip FIGlet, go directly to original title ---
+                currentScreen = 'originalTitle';
+                originalTitleState.linesToShow = ASCII_ART_INTRO.originalTitle.map(() => "");
+                originalTitleState.lineIndex = 0;
+                originalTitleState.charIndex = 0;
+                animateOriginalTitle();
+            }
+        }
+        function showHyperspaceIntro() {
+            console.log("Starting Hyperspace Intro");
+            currentScreen = 'hyperspaceIntro';
+            hyperspaceState.elapsed = 0;
+            hyperspaceState.center_x = GAME_WIDTH_CHARS / 2;
+            hyperspaceState.center_y = GAME_HEIGHT_LINES / 2;
+            hyperspaceState.max_radius = Math.max(GAME_WIDTH_CHARS / 2, GAME_HEIGHT_LINES / 2) * 1.3;
+            initHyperspaceParticles();
+            if (hyperspaceState.intervalId) clearInterval(hyperspaceState.intervalId); // Clear previous if any
+            hyperspaceState.intervalId = setInterval(updateAndRenderHyperspace, hyperspaceState.animationIntervalTime);
+        }
+
+        function animateOriginalTitle() {
+            if (originalTitleState.lineIndex < ASCII_ART_INTRO.originalTitle.length) {
+                const currentLine = ASCII_ART_INTRO.originalTitle[originalTitleState.lineIndex];
+                if (originalTitleState.charIndex < currentLine.length) {
+                    originalTitleState.linesToShow[originalTitleState.lineIndex] += currentLine[originalTitleState.charIndex];
+                    originalTitleState.charIndex++;
+                } else {
+                    originalTitleState.lineIndex++;
+                    originalTitleState.charIndex = 0;
+                }
+                renderAscii(padArt(originalTitleState.linesToShow, GAME_WIDTH_CHARS, ASCII_ART_INTRO.originalTitle.length), 'title-text');
+                setTimeout(animateOriginalTitle, ORIGINAL_TITLE_ANIM_SPEED_MS);
+            } else {
+                setTimeout(() => {
+                    currentScreen = 'placeholder1';
+                    showPlaceholder1();
+                }, ORIGINAL_TITLE_HOLD_MS);
+            }
+        }
+        function showPlaceholder1() {
+            renderAscii(padArt(ASCII_ART_INTRO.placeholder1_loading, GAME_WIDTH_CHARS, ASCII_ART_INTRO.placeholder1_loading.length), 'placeholder-text');
+            setTimeout(() => {
+                currentScreen = 'vjBlindLogo';
+                showVJBlindLogo();
+            }, PLACEHOLDER_HOLD_MS);
+        }
+        function showVJBlindLogo() {
+            let logoHTML = ASCII_ART_INTRO.vjBlindIncLogo.join('\n');
+            logoHTML = logoHTML.replace(/VV   VV/g, '<span class="vj-v">VV   VV</span>')
+                               .replace(/JJJJJJ/g, '<span class="vj-j">JJJJJJ</span>')
+                               .replace(/BBBBB/g, '<span class="vj-b">BBBBB</span>')
+                               .replace(/L\s/g, m => `<span class="vj-l">${m}</span>`) // Handle L correctly
+                               .replace(/ LLLLL/g, '<span class="vj-l"> LLLLL</span>')
+                               .replace(/IIII/g, '<span class="vj-i">IIII</span>')
+                               .replace(/NN   NN/g, '<span class="vj-n">NN   NN</span>')
+                               .replace(/CCCCC/g, '<span class="vj-c">CCCCC</span>')
+                               .replace(/- Creative ASCII Solutions -/g, '<span class="vj-slogan">- Creative ASCII Solutions -</span>');
+            logoHTML = logoHTML.replace(/ V /g, '<span class="vj-v"> V </span>')
+                               .replace(/ JJ /g, '<span class="vj-j"> JJ </span>')
+                               .replace(/B   B/g, '<span class="vj-b">B   B</span>')
+                               .replace(/ II /g, '<span class="vj-i"> II </span>')
+                               .replace(/NNN  NN/g, '<span class="vj-n">NNN  NN</span>')
+                               .replace(/C\s/g, m => `<span class="vj-c">${m}</span>`); // Handle C correctly
+
+            renderAscii([], 'placeholder-text', true, logoHTML);
+            setTimeout(() => {
+                currentScreen = 'placeholder3';
+                startTransmissionAnimation();
+            }, PLACEHOLDER_HOLD_MS + 1000);
+        }
+        function startTransmissionAnimation() {
+            transmissionState.lines = ASCII_ART_INTRO.placeholder3_gameTeaser;
+            transmissionState.currentLineIndex = 0;
+            transmissionState.shownLines = [];
+            clearGameArea();
+            animateTransmissionLine();
+        }
+        function animateTransmissionLine() {
+            if (transmissionState.currentLineIndex < transmissionState.lines.length) {
+                transmissionState.shownLines.push(transmissionState.lines[transmissionState.currentLineIndex]);
+                let content = "";
+                transmissionState.shownLines.forEach((line, index) => {
+                    const style = (index === transmissionState.shownLines.length - 1)
+                        ? `style="opacity:0; animation: fadeIn 0.5s forwards ${index * 0.05}s;"` // Faster reveal
+                        : 'style="opacity:1;"';
+                    content += `<span class="incoming-transmission-line" ${style}>${line.padEnd(GAME_WIDTH_CHARS)}</span>`;
+                });
+                gameArea.innerHTML = `<div class="placeholder-text">${content}</div>`;
+                const lines = gameArea.querySelectorAll('.incoming-transmission-line');
+                if (lines.length > 0) lines[lines.length - 1].style.opacity = '1'; // Ensure immediate visibility for animation
+
+                transmissionState.currentLineIndex++;
+                setTimeout(animateTransmissionLine, TRANSMISSION_LINE_DELAY_MS);
+            } else {
+                setTimeout(() => {
+                    currentScreen = 'menu';
+                    showMainMenu();
+                }, PLACEHOLDER_HOLD_MS);
+            }
+        }
+
+        function renderMainMenu() {
+            clearGameArea();
+            renderMenuBackground();
+            const menuContainer = document.createElement('div');
+            menuContainer.style.position = 'relative'; menuContainer.style.zIndex = '1';
+            const header = document.createElement('div');
+            header.className = 'menu-header title-text';
+            header.textContent = "[ MISSION BRIEFING ]";
+            menuContainer.appendChild(header);
+            menuItems.forEach((item, index) => {
+                const menuItemDiv = document.createElement('div');
+                menuItemDiv.className = 'menu-item';
+                if (index === selectedMenuItemIndex) {
+                    menuItemDiv.classList.add('selected');
+                    menuItemDiv.textContent = `>> ${item} <<`;
+                } else { menuItemDiv.textContent = `   ${item}   `; }
+                menuItemDiv.onclick = () => { selectedMenuItemIndex = index; handleMainMenuSelection(); };
+                menuContainer.appendChild(menuItemDiv);
+            });
+            gameArea.appendChild(menuContainer);
+        }
+        function renderWorldSelectScreen() {
+            clearGameArea();
+            renderMenuBackground();
+            const screenContainer = document.createElement('div');
+            screenContainer.style.position = 'relative'; screenContainer.style.zIndex = '1';
+            screenContainer.style.width = '100%'; screenContainer.style.textAlign = 'center';
+            const header = document.createElement('div');
+            header.className = 'menu-header title-text';
+            header.textContent = "[ SELECT DEPLOYMENT ZONE ]";
+            screenContainer.appendChild(header);
+            const worldsContainer = document.createElement('div');
+            worldsContainer.className = 'world-select-container';
+            worldData.forEach((world, index) => {
+                const worldOptionDiv = document.createElement('div');
+                worldOptionDiv.className = 'world-option';
+                if (index === selectedWorldIndex) { worldOptionDiv.classList.add('selected'); }
+                const artDiv = document.createElement('div');
+                artDiv.className = 'world-art'; artDiv.textContent = world.art.join('\n');
+                worldOptionDiv.appendChild(artDiv);
+                const nameDiv = document.createElement('div');
+                nameDiv.className = 'world-name'; nameDiv.textContent = world.name.toUpperCase();
+                worldOptionDiv.appendChild(nameDiv);
+                worldOptionDiv.onclick = () => { selectedWorldIndex = index; handleWorldSelection(); };
+                worldsContainer.appendChild(worldOptionDiv);
+            });
+            screenContainer.appendChild(worldsContainer);
+            const descriptionDiv = document.createElement('div');
+            descriptionDiv.style.marginTop = '15px'; descriptionDiv.style.color = '#00BFFF';
+            descriptionDiv.style.fontSize = '0.9em';
+            descriptionDiv.textContent = worldData[selectedWorldIndex].description;
+            screenContainer.appendChild(descriptionDiv);
+            gameArea.appendChild(screenContainer);
+        }
+        function showMainMenu() { selectedMenuItemIndex = 0; renderMainMenu(); }
+
+        function handleMainMenuSelection() {
+            const selectedItem = menuItems[selectedMenuItemIndex];
+            switch (selectedItem) {
+                case "Engage Targets": currentScreen = 'worldSelect'; selectedWorldIndex = 0; renderWorldSelectScreen(); break;
+                case "System Config": gameArea.innerHTML = "<div class='placeholder-text'>System Configuration (Not Implemented) <br><br> Press Enter to go back.</div>"; currentScreen = 'options_temp_pause'; break;
+                case "Abort Mission": gameArea.innerHTML = "<div class='placeholder-text'>Mission Aborted. Standby. <br><br> You would close the tab now.</div>"; currentScreen = 'exit_temp_pause'; break;
+            }
+        }
+        function handleWorldSelection() {
+            const selectedWorld = worldData[selectedWorldIndex];
+            if (selectedWorld.script === 'back') { currentScreen = 'menu'; showMainMenu(); }
+            else if (selectedWorld.script === 'space') {
+                clearGameArea();
+                gameArea.innerHTML = `<div class='placeholder-text' style="color:#0f0;">ENGAGING WARP DRIVE TO HOSTILE SECTOR...<br><br>TARGETING: <span style="color:#ff0;">worldA.html</span><br><br>STAND BY...</div>`; // Changed target
+                setTimeout(() => { window.location.href = 'worldA.html'; }, 2500);
+            } else { loadGameScript(selectedWorld.script, selectedWorld.name); }
+        }
+        function loadGameScript(scriptName, worldName) {
+            clearGameArea();
+            gameArea.innerHTML = `<div class='placeholder-text'>Initializing Deployment to ${worldName.toUpperCase()}... <br><br> (Executing: ${scriptName}.script)</div>`;
+            console.log(`Placeholder: Load ${scriptName} game script for ${worldName}.`);
+            currentScreen = 'game_loaded_placeholder';
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (currentScreen === 'menu') {
+                if (e.key === 'ArrowUp') { selectedMenuItemIndex = (selectedMenuItemIndex - 1 + menuItems.length) % menuItems.length; renderMainMenu(); }
+                else if (e.key === 'ArrowDown') { selectedMenuItemIndex = (selectedMenuItemIndex + 1) % menuItems.length; renderMainMenu(); }
+                else if (e.key === 'Enter') { handleMainMenuSelection(); }
+            } else if (currentScreen === 'worldSelect') {
+                let prev = selectedWorldIndex;
+                if (e.key === 'ArrowLeft') { selectedWorldIndex = (selectedWorldIndex - 1 + worldData.length) % worldData.length; }
+                else if (e.key === 'ArrowRight') { selectedWorldIndex = (selectedWorldIndex + 1) % worldData.length; }
+                else if (e.key === 'Enter') { handleWorldSelection(); }
+                if (prev !== selectedWorldIndex) renderWorldSelectScreen();
+            } else if ((currentScreen === 'options_temp_pause' || currentScreen === 'exit_temp_pause') && e.key === 'Enter') {
+                currentScreen = 'menu'; showMainMenu();
+            }
+        });
+
+        function startAdvancedIntro() {
+            console.log("Starting Advanced Intro Sequence");
+            // Pad art arrays. Crucial that this happens before they are used.
+            // ASCII_ART_INTRO.figletTitle = padArt(ASCII_ART_INTRO.figletTitle, GAME_WIDTH_CHARS); // No longer needed
+            ASCII_ART_INTRO.originalTitle = padArt(ASCII_ART_INTRO.originalTitle, GAME_WIDTH_CHARS);
+            originalTitleState.linesToShow = ASCII_ART_INTRO.originalTitle.map(() => ""); // Initialize for originalTitle animation
+
+            showHyperspaceIntro();
+        }
+
+        setTimeout(startAdvancedIntro, 300); // Reduced initial delay
+    </script>
+</body>
+</html>

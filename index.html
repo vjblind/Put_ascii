@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Chat with Code Preview</title>
+</head>
+<body>
+    <script src="https://js.puter.com/v2/"></script>
+
+    <div>
+        <input type="text" id="promptInput" placeholder="Enter your prompt here" style="width: 60%;">
+        <button id="sendBtn">Send</button>
+    </div>
+    <pre id="output" style="margin-top: 20px; background: #f4f4f4; padding: 10px; min-height: 100px; white-space: pre-wrap;"></pre>
+
+    <!-- HTML input and preview -->
+    <div style="margin-top:30px;">
+        <label for="htmlInput" style="font-weight:bold;">Extracted HTML Code:</label><br>
+        <textarea id="htmlInput" style="width:98%;height:200px;font-family:monospace;font-size:15px;margin-top:8px;"></textarea><br>
+        <button id="refreshPreviewBtn" style="margin:10px 0 10px 0;">Refresh Preview</button>
+        <div style="border:1px solid #ccc; margin-top:10px;">
+            <iframe id="htmlPreview" style="width:100%;height:320px;border:none;background:#fff;"></iframe>
+        </div>
+    </div>
+
+    <script>document.getElementById('sendBtn').addEventListener('click', async function() {
+    const prompt = document.getElementById('promptInput').value;
+    const output = document.getElementById('output');
+    const htmlInput = document.getElementById('htmlInput');
+
+    output.textContent = '';
+    htmlInput.value = '';
+
+    if (!prompt.trim()) {
+        output.textContent = 'Please enter a prompt.';
+        return;
+    }
+
+    try {
+        const response = await puter.ai.chat(
+            prompt,
+            { model: 'claude-3-7-sonnet', stream: true }
+        );
+
+        let answer = '';
+        let codeBlock = '';
+
+        for await (const part of response) {
+            const text = part?.text || '';
+            answer += text;
+            output.textContent = answer;
+        }
+
+        // ✅ NEW: Detect if ```html exists anywhere in the answer
+        if (answer.includes("```html")) {
+            alert("HTML code detected!");
+        } else {
+            alert("No HTML found. Here's part of the answer:\n\n" + answer.substring(0, 150));
+        }
+
+    } catch (err) {
+        output.textContent = 'Error: ' + err.message;
+    }
+});
+
+
+// Refresh preview when button is clicked
+document.getElementById('refreshPreviewBtn').addEventListener('click', function() {
+    const htmlCode = document.getElementById('htmlInput').value;
+    
+    if (htmlCode.trim() === "") {
+        alert("No HTML code detected. Please send a valid prompt first.");
+        return;
+    }
+
+    document.getElementById('htmlPreview').srcdoc = htmlCode;
+});
+ 
+    </script>
+</body>
+</html>

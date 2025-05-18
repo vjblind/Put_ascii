@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Futuristic ASCII Bullet Hell - Startup Crash Fix</title>
+    <style>
+        body { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 100vh; margin: 0; background-color: #000; color: #0ff; font-family: monospace; font-size: 10px; line-height: 1; } /* Adjusted font-size for potentially larger area */
+        #hudTop, #hudBottom { width: calc(100ch + 20px + 4px); padding: 5px; background-color: #001; border-bottom: 2px solid #0af; border-top: 2px solid #0af; display: flex; align-items: center; font-size: 12px; white-space: pre; } /* Adjusted width and font-size */
+        #hudTop { margin-bottom: 5px; border-top: none;}
+        #hudBottom { margin-top: 5px; border-bottom: none; flex-direction: row-reverse; }
+        .avatar-box { border: 1px solid #077; padding: 2px; margin: 0 10px; text-align: center; min-width: 7ch; }
+        .avatar-name { margin-bottom: 3px; color: #FFD700; }
+        #gameArea { white-space: pre; background-color: #001; padding: 10px; border: 2px solid #0af; overflow: hidden; position: relative; }
+        .text-default { color: #0ff; } .bullet-orange { color: #FFA500; font-weight: bold; }
+        .laser-white { color: #FFFFFF; text-shadow: 0 0 3px #FFF, 0 0 5px #FFF; }
+        .laser-green { color: #00FF00; text-shadow: 0 0 3px #0F0, 0 0 5px #0F0; }
+        .laser-blue { color: #66DDFF; text-shadow: 0 0 5px #66DDFF, 0 0 10px #33CCFF; font-weight: bold;}
+        .powerup-text { color: #33FF33; } .explosion-c1 { color: #FFFF00; }
+        .explosion-c2 { color: #FFA500; } .explosion-c3 { color: #FF4500; } .explosion-c4 { color: #FF0000; }
+        .death-symbol-color { color: #AAAAAA; } .hud-name-ingame { color: #FFD700; }
+        .serpent-head { color: #FF6347; } .serpent-body { color: #7FFF00; }
+        .banner-text { color: #FF00FF; font-weight: bold; }
+        .shield-active { color: #00BFFF; text-shadow: 0 0 2px #00BFFF; }
+        .faded-background-art { color: #033; opacity: 0.25; }
+        .player-orange { color: #FFA500; } /* Orange for player */
+        .ally-green { color: #33FF33; font-weight: bold; } /* Bright Green for allies */
+        .ally-laser-cyan { color: #00FFFF; text-shadow: 0 0 3px #00FFFF, 0 0 5px #00FFFF; } /* Cyan for ally lasers */
+    </style>
+</head>
+<body>
+    <div id="hudTop">
+        <div class="avatar-box" id="enemyAvatarArt">---<br>N/A<br>---</div>
+        <div id="enemyAvatarName" class="avatar-name">TARGET: SCANNING...</div>
+    </div>
+    <div id="gameArea">Initializing Systems... Crash Hunt Active.</div>
+    <div id="hudBottom">
+        <div class="avatar-box" id="playerAvatarArt"> ^ <br> &lt; &gt; <br> ^ ^ </div>
+        <div id="playerAvatarName" class="avatar-name">PLAYER: STANDBY</div>
+    </div>
+    
+    <script>
+        console.log("SCRIPT EXECUTION STARTED (Crash Hunt)");
+        document.getElementById('gameArea').textContent = "Stage 1: Script Parsed.";
+
+        // --- Constants & Utility ---
+        const CHAR_SETS = { shapes: "▣▣+▣◀◁x░░*▓▓▣▶▷░░░░", circles: "●◯●◯●◯●◯8●◯●◯●◯●◯", futuristic: "^^^^¤^^^^*°°°°<<>>>-____¤___*<<>>", symbols: "@#$%^&*()_+={}[]:;\"'<>,.?/", slashes: "|/\\|/-\\|\\/-|//\\||\\", overlay: "░▒▓█", extended: "│┤╡╢╖╕╣║╗╝╜╛┐└┴├─┼╞╟╚╔╩╦╠═╬╧╨╤╥╙╘╒╓╫╪┘┌█▄▌▐▀αßΓπΣσµτΦΘΩδ∞φλε∩≡±≥≤⌠⌡÷≈°∙·√ⁿ²■" };
+        const GAME_WIDTH = 100; // Increased width
+        const GAME_HEIGHT = 60; // Increased height
+        class Vector2 { constructor(x = 0, y = 0) { this.x = x; this.y = y; } add(other) { return new Vector2(this.x + other.x, this.y + other.y); } equals(other) { return this.x === other.x && this.y === other.y; } }
+
+        const ASCII_ART = {
+            player: [ "   ▲   ", "  <█>  ", " ◢◤█◥◣ ", "╿ ▲▲▲ ╿" ], player_large: [ "   ▲▲  ", "  <██>  ", " ◢◤▀▀◥◣ ", "╿█ ▲▲ █╿", "  ╲ II ╱  " ], player_augmented: [ "  ║ ▲ ║  ", " <╱█╲> ", "◢◣ ▼ ◢◣", "╿█▀▀▀█╿", "  ╲███╱  " ], player_avatar: [ "  ^-^  ", " ( o ) ", "  `ӊ`  " ],
+            allyShip: [ "  ◊  ", " <^> ", " ╔╩╗ " ],
+            powerUp_sizeIncrease: [ "╭───╮", "│ S │", "╰───╯" ], powerUp_laserCharge: [ "╭───╮", "│ L │", "╰───╯" ], powerUp_shieldCharge: [ "╭───╮", "│ 🛡 │", "╰───╯" ], powerUp_augment: [ "╭───╮", "│ ★ │", "╰───╯" ],
+            basicEnemy: [ " ▼▼▼ ", "◢■■■◣", "◥ ▲▲ ◤" ], basicEnemy_avatar: [ "  vVv  ", " (oVo) ", "  `ӊ`  " ],
+            laserEnemy: [ " <◊═◊> ", "╔═╩█╩═╗", "  ╿╿╿  " ], laserEnemy_scout: [ " <◊> ", "╔═█═╗", "  ╿  " ], laserEnemy_heavy: ["«<[◊Ξ◊]>»","╠══╦█╦══╣","  ▌╿╿╿▐  ","   ╚═╝   "], laserEnemy_avatar: [ "  <->  ", " ( ◊ ) ", "  `ӊ`  " ],
+            serpentHead: [ "  .--.  ", " /ö_ö\\ \\ ", " \\ vv / ", "  `~~'  "], serpentBody: [ "╭ 形 ╮", "╞═══╡", "╰────╯"], serpent_avatar: [ "  .--. ", " /oo\\ \\", " \\__/` " ],
+            deathSymbol: [ "   ╔═══╗   ", "   ║RIP║   ", "   ║   ║   ", "╔══╩═══╩══╗", "║          ║", "╚══════════╝" ],
+            boss: [ "   ║   ║   ", "^-═<[█]>═-^", "▓▓<[╦]>▓▓", "░░█▓█▓█░░", " VV¤°¤VV " ], boss_avatar: [ " <███> ", "[XXXXX]", " VVVVV " ],
+            megaBoss: [ "   ║   ║   ", "◢▇▆<[█]>▆▇◣", "▓▓<[╬]>▓<<<(¤¤¤)-X-(¤¤¤)>>>▓<[╬]>▓▓", "▒▒▒{{{{**@**@**@**}}}}▒▒▒", "░░<[═]>░\\\\////VVVVVVVV\\\\////░<[═]>░░", "  VVVV----<[코어_파괴]>----VVVV  " ], megaBoss_avatar: [ "◢███◣", "█<¤>█", "◥███◤" ],
+                        titanMegaBoss: [
+                "      ╔════════◢█████◣════════╗      ",
+                "    ◢█<◢▓▓▓<{{{[TITAN]}}}▓▓▓◣>█◣    ",
+                "   ◢██╣<[╬╬]>████████████<[╬╬]>╣██◣   ",
+                "  ◢███╦════◥<▓▓▓[█]▓▓▓>◤════╦███◣  ",
+                " █████╣<◢◣>█████[█]█████<◢◣>╣█████ ",
+                "◢█████╬╬╬╬╬◥◤<<<(¤¤¤)>>>◥◤╬╬╬╬╬█████◣",
+                "██████╣╣===={{{{**@**@**@**}}}}===╣╣██████",
+                "◥█████╩╩---◢◤\\\\////▼▼▼▼\\\\////◥◤---╩╩█████◤",
+                " ◥████/|||||\\░<[═══]>░/|||||\████◤ ",
+                "  ◥███{||V||}---OVERLORD---{||V||}███◤  ",
+                "   ◥██╝VVVVV<<<|>█<|>█<|>>>>VVVVV╚██◤   ",
+                "    ◥█<◥▓▓▓<{[DESTROYER]}▓▓▓◤>█◤    ",
+                "      ╚════════◥█████◤════════╝      "],
+            titanMegaBoss_avatar: [ "◢█████◣", "█<TITAN>█", "◥█████◤"
+            ],
+            missile: [ "  ▼  ", " ╲█╱ ", "═╦╦╦═" ], multiMissile: [ "  ▼   ▼   ▼  ", "  ╲█╱ ╲█╱ ╲█╱ ", "═╦╤═╤╤╤╤═╤╤╦═" ], bullet: ["•"],
+            explosion: [ ["   *   ","  * *  ","   *   "],["  \\|/  "," --*-- ","  /|\\  "],[" \\\\|// ","-=*@*=-"," //|\\\\ "],["\\\\\\|///","==*@*==","///|\\\\\\"],[" ░▒▓█▓▒░ ","░▒▓███▓▒░","▒▓█████▓▒","▓███████▓","▒▓█████▓▒","░▒▓███▓▒░"," ░▒▓█▓▒░ "] ],
+            hexStructure: [ ["   ╲   ╱   "," ╭───⛶───╮ "," │╲  *  ╱│ "," ⛶───◊───⛶ "," │╱     ╲│ "," ╰───⛶───╯ ","   ╱   ╲   "], ["    ╲ ╱    ","  ╲─────╱  "," ╭─╲ * ╱─╮ "," │   ◊   │ "," ╰─╱   ╲─╯ ","  ╱─────╲  ","    ╱ ╲    "], ["   ╱   ╲   "," ╭───◇───╮ "," │╱  ¤  ╲│ "," ◇───*───◇ "," │╲     ╱│ "," ╰───◇───╯ ","   ╲   ╱   "] ],
+            spaceStation: [ "    ╭──────────╮    ", "╭───┤ ▓▓▓▓▓▓▓▓ ├───╮", "│╭──┤ ▒▒▒▒▒▒▒▒ ├──╮│", "││  │ ░░░░░░░░ │  ││", "││╭─┤ ▓▓▓▓▓▓▓▓ ├─╮││", "│││ └──────────┘ │││", "╰╯╰───────────────╯╰╯" ],
+            planet_saturn_jgs: [ "         ,MMM8&&&.", "    _...MMMMM88&&&&..._", " .::'''MMMMM88&&&&&&'''::.", "::     MMMMM88&&&&&&     ::", "'::....MMMMM88&&&&&&....::'", "   `''''MMMMM88&&&&''''`", "   jgs   'MMM8&&&'" ],
+            banner_waveIncoming: [ "WW   WW   AA   VV  VV EEEEEEE ", "WW   WW  AAAA  VV  VV EE      ", "WW W WW AA  AA  VVVV  EEEEEEE ", " WWW WWW AAAAAA  VV   EE      ", "  WW WW AA  AA  VV   EEEEEEE ", "-----------------------------", "   I N C O M I N G ! ! !     " ],
+            banner_serpentSighted: [ " SSSSS  EEEEEEE RRRRRR  PPPPPP  EEEEEEE NN   NN TTTTTTT ", "SS      EE      RR   RR PP   PP EE      NNN  NN   TTT   ", " SSSSS  EEEEEEE RRRRRR  PPPPPP  EEEEEEE NN N NN   TTT   ", "     SS EE      RR  RR  PP      EE      NN  NNN   TTT   ", " SSSSS  EEEEEEE RR   RR PP      EEEEEEE NN   NN   TTT   " ],
+            banner_bossIncoming: [ "BBBBBB   OOOOO   SSSSS   SSSSS  !! ", "BB   BB OO   OO SS      SS      !! ", "BBBBBB  OO   OO  SSSSS   SSSSS  !! ", "BB   BB OO   OO      SS      SS    ", "BBBBBB   OOOOO   SSSSS   SSSSS  !! " ],
+            banner_systemOverride: [ " SSS Y  Y SSS TTT EEEEE M   M ", "S    Y  Y S    T  EE    MM MM ", " SSS  YY   SSS  T  EEEEE M M M ", "    S  Y      S  T  EE    M   M ", " SSS   Y   SSS   T  EEEEE M   M ", "-------------------------------", "   O V E R R I D E : B L U E   " ],
+            banner_shipAugmented: [ " SSS H  H III PPPPP     AA   U  U  GGGG M   M EEEEE NNN  NN TTTTT EEEEE DDDDD  ", "S    H  H  I  PP  PP   AAAA  U  U GG     MM MM EE    NNN  NN  TTT  EE    DD  DD ", " SSS HHHH  I  PPPPP   AA  AA U  U GG GGG M M M EEEEE NN N NN  TTT  EEEEE DD  DD ", "    S H  H  I  PP      AAAAAA U  U GG  GG M   M EE    NN  NNN  TTT  EE    DD  DD ", " SSS  H  H III PP       AA  AA UU UU  GGGG M   M EEEEE NN   NN  TTT  EEEEE DDDDD  " ],
+            banner_docPixel: [
+                "DDDDDD    OOOOO    CCCCC  PPPPPP  IIIII XXXXXX  EEEEEEE LL      ",
+                "DD   DD  OO   OO  CC    C PP   PP  III    XX    EE      LL      ",
+                "DD   DD  OO   OO  CC      PPPPPP   III    XX    EEEEEEE LL      ",
+                "DD   DD  OO   OO  CC    C PP       III    XX    EE      LL      ",
+                "DDDDDD    OOOOO    CCCCC  PP      IIIII XXXXXX  EEEEEEE LLLLLLL "
+            ],
+            banner_thereminou: [
+                "TTTTTTT HHHHHH  EEEEEEE RRRRRR  EEEEEEE MMMMMMM IIIII NN   NN  OOOOO  UU   UU ",
+                "  TTT   HH  HH  EE      RR   RR EE      MM M MM  III  NNN  NN OO   OO UU   UU ",
+                "  TTT   HHHHHH  EEEEEEE RRRRRR  EEEEEEE MM M MM  III  NN N NN OO   OO UU   UU ",
+                "  TTT   HH  HH  EE      RR  RR  EE      MM   MM  III  NN  NNN OO   OO UU   UU ",
+                "  TTT   HH  HH  EEEEEEE RR   RR EEEEEEE MM   MM IIIII NN   NN  OOOOO   UUUUU  "
+            ]
+        };
+        console.log("ASCII_ART object defined.");
+        document.getElementById('gameArea').textContent = "Stage 2: Constants & ASCII_ART Defined. Defining GameState...";
+        
+        class GameState {
+            constructor() { this.player = null; this.enemies = []; this.boss = null; this.background = { stars: [], layers: [], planets: [], detailedElements: [] }; this.powerUps = []; this.score = 0; this.difficulty = 0.5; this.gameOver = false; this.tick = 0; this.hudName = "PILOT-X"; this.enemySpawnEvent = null; this.serpents = []; this.activeBanners = []; this.currentTargetEnemy = null; this.allies = []; }
+            fullReset(mode = null) { console.log("GameState: fullReset - START - Mode:", mode); this.player = { pos: new Vector2(Math.floor(GAME_WIDTH / 2), GAME_HEIGHT - 7), health: 500, direction: 1, randomMoveTicks: 0, projectiles: [], explosions: [], isLarge: false, isAugmented: false, currentArt: ASCII_ART.player, augmentationLevel: 0, laserCharges: 3, activeLasers: [], manualControl: false, selectedWeapon: 'bullet', keysPressed: {}, baseFireRate: 3, projectileDamage: 15, laserDamageMultiplier: 3, invincibilityTicks: 0, shieldCharges: 1, shieldActive: false, shieldTicksLeft: 0, shieldArtCurrentFrame: 0, shieldArtFrameTick: 0, shieldArtFrameSpeed: 8, blueLaserModeActive: false, blueLaserTicksLeft: 0, blueLaserCooldown: 0, augmentationProgress: 0, augmentationThreshold: 3000, nextAugmentationThreshold: 7000 }; this.enemies = []; this.boss = null; this.background = { stars:[], layers:[], planets:[], detailedElements:[] }; this.powerUps = []; this.score = 0; this.difficulty = 0.5; this.gameOver = false; this.tick = 0; this.hudName = this.generateRandomName(); this.enemySpawnEvent = null; this.serpents = []; this.activeBanners = []; this.currentTargetEnemy = null; this.allies = []; console.log("GameState: fullReset - Calling initBackground for mode:", mode); this.initBackground(mode); if (mode) { console.log("GameState: fullReset - Calling setMode for mode:", mode); this.setMode(mode); } console.log("GameState: fullReset - FINISHED."); }
+            generateRandomName() { const p=["CYBER","VOID","NEXUS","NOVA","QUANTUM","ZERO","XENO","STAR","PULSAR"]; const s=["STRIKER","RAIDER","HAWK","VIPER","PHANTOM","COMET","ACE","BLAZE","FURY"]; return `${p[Math.floor(Math.random()*p.length)]}-${s[Math.floor(Math.random()*s.length)]}`; }
+            initBackground(currentMode = null) { this.background.planets = []; this.background.layers = [ Array.from({ length: Math.floor(GAME_WIDTH / 3) }, () => ({ pos: new Vector2(Math.floor(Math.random()*GAME_WIDTH),Math.floor(Math.random()*GAME_HEIGHT)), char: CHAR_SETS.futuristic[Math.floor(Math.random()*CHAR_SETS.futuristic.length)], speed: 1 })), Array.from({ length: Math.floor(GAME_WIDTH / 4) }, () => ({ pos: new Vector2(Math.floor(Math.random()*GAME_WIDTH),Math.floor(Math.random()*GAME_HEIGHT)), char: CHAR_SETS.shapes[Math.floor(Math.random()*CHAR_SETS.shapes.length)], speed: 2 })) ]; this.background.detailedElements = []; if (ASCII_ART.planet_saturn_jgs) { this.background.detailedElements.push({ pos: new Vector2(Math.floor(Math.random() * (GAME_WIDTH - ASCII_ART.planet_saturn_jgs[0].length)), Math.floor(Math.random() * GAME_HEIGHT / 2) - ASCII_ART.planet_saturn_jgs.length), art: ASCII_ART.planet_saturn_jgs, speed: 0.03, type: 'faded_planet', initialY: Math.floor(Math.random() * GAME_HEIGHT) }); } if (currentMode === 7 && ASCII_ART.spaceStation && ASCII_ART.spaceStation[0]) { this.background.detailedElements.push({ pos: new Vector2(Math.floor(Math.random()*(GAME_WIDTH-(ASCII_ART.spaceStation[0].length)-5)), Math.floor(Math.random()*(GAME_HEIGHT/3))), art: ASCII_ART.spaceStation, speed: 0.02, type: 'station'}); } if (ASCII_ART.hexStructure && ASCII_ART.hexStructure[0] && ASCII_ART.hexStructure[0][0]) {this.background.detailedElements.push({ pos: new Vector2(GAME_WIDTH-ASCII_ART.hexStructure[0][0].length-10, 5), animation: ASCII_ART.hexStructure, currentFrame: 0, frameTick: 0, frameSpeed: 15, speed: 0.03, type: 'hex' }); }}
+            setMode(modeNumber) { console.log("GameState: setMode - START - Mode:", modeNumber); this.difficulty = 0.5 + (modeNumber -1) * 0.6; if (this.player) { this.player.health = 500 + (modeNumber-1) * 100; this.player.laserCharges = 3 + modeNumber; this.player.projectileDamage = 15 + modeNumber * 2; this.player.shieldCharges = 1 + Math.floor((modeNumber-1)/2); } if (window.gameLogicInstance) { window.gameLogicInstance.lastSerpentSpawnTick = -window.gameLogicInstance.serpentSpawnCooldown; switch (modeNumber) { case 1: break; case 2: this.score = 1500; break; case 3: this.score = 2500; this.difficulty = 1.8; window.gameLogicInstance.startEnemySpawnEvent('mixed_mode3', 450, 20); break; case 4: this.score = 4000; window.gameLogicInstance.spawnSerpent(); window.gameLogicInstance.startEnemySpawnEvent('flood', 240, 3); this.addBanner(ASCII_ART.banner_serpentSighted, "SERPENT SWARM!"); break; case 5: this.score = 6000; window.gameLogicInstance.spawnBoss('mega'); this.enemySpawnEvent = { type: 'boss_adds', duration: Infinity, spawnInterval: 90, ticksUntilNextSpawn: 45, initialDelay: 0 }; this.addBanner(ASCII_ART.banner_bossIncoming, "MEGA BOSS ALERT!"); break; case 7: this.score = 1000; this.difficulty = 1.2; this.initBackground(7); this.addBanner(["SPACE STATION APPROACHING"], "SPACE STATION", "talking"); window.gameLogicInstance.startEnemySpawnEvent('station_defense', 300, 25); break;} } else { console.warn("gameLogicInstance not ready for mode-specific spawns during setMode. Mode:", modeNumber); } console.log("GameState: setMode - FINISHED for mode:", modeNumber);}
+            addBanner(art, textFallback = "", type = "standard") { const bannerHeight = art ? art.length : 1; const bannerWidth = art && art[0] ? art[0].length : textFallback.length; let banner = { art: art, text: textFallback, pos: new Vector2(GAME_WIDTH, Math.floor((GAME_HEIGHT - bannerHeight) / 2)), speed: type === "talking" ? 0.2 : 1, duration: type === "talking" ? 240 : Math.floor((GAME_WIDTH + bannerWidth) / 1) + 60, type: type, currentCharIndex: 0, currentDisplay: [], isAnimating: type === "talking" }; this.activeBanners.push(banner); }
+            updateCurrentTargetEnemy() {
+                if (this.boss) {
+                    let avatar = ASCII_ART.boss_avatar; // Default boss avatar
+                    if (this.boss.type === 'mega') avatar = ASCII_ART.megaBoss_avatar;
+                    else if (this.boss.type === 'titan') avatar = ASCII_ART.titanMegaBoss_avatar;
+                    this.currentTargetEnemy = { name: this.boss.type.toUpperCase() + " BOSS", art: avatar };
+                    return;
+                }
+                if (this.serpents.length > 0 && this.serpents[0].segments.length > 0) { this.currentTargetEnemy = { name: "SERPENT ALPHA", art: ASCII_ART.serpent_avatar }; return; }
+                if (this.enemies.length > 0) { const significantTypes = ['laserEnemy_heavy', 'laserEnemy_standard', 'laserEnemy_scout']; let priorityEnemy = this.enemies.find(e => significantTypes.includes(e.type)); if (!priorityEnemy) priorityEnemy = this.enemies[Math.floor(Math.random() * this.enemies.length)]; if(priorityEnemy) { let avatarArt = ASCII_ART.basicEnemy_avatar; if (priorityEnemy.type.includes('laser')) avatarArt = ASCII_ART.laserEnemy_avatar; this.currentTargetEnemy = { name: priorityEnemy.type.replace("_", " ").toUpperCase(), art: avatarArt };} else {this.currentTargetEnemy = null;} } else { this.currentTargetEnemy = null; }
+            }
+        }
+        console.log("GameState class defined.");
+        document.getElementById('gameArea').textContent = "Stage 3: GameState Defined. Defining AsciiRenderer...";
+        
+        class AsciiRenderer {
+            constructor(gameState) { this.gameState = gameState; this.gameArea = document.getElementById('gameArea'); this.defaultColorClass = 'text-default'; if(document.getElementById('enemyAvatarArt')) this.enemyAvatarArtDiv = document.getElementById('enemyAvatarArt'); if(document.getElementById('enemyAvatarName')) this.enemyAvatarNameDiv = document.getElementById('enemyAvatarName'); if(document.getElementById('playerAvatarArt')) this.playerAvatarArtDiv = document.getElementById('playerAvatarArt'); if(document.getElementById('playerAvatarName')) this.playerAvatarNameDiv = document.getElementById('playerAvatarName'); }
+            escapeHTML(char) {
+                if (!char) return '';
+                switch (char) {
+                    case '<': return '&lt;';
+                    case '>': return '&gt;';
+                    case '&': return '&amp;';
+                    default: return char;
+                }
+            }
+            clearScreen() { return Array.from({ length: GAME_HEIGHT }, () => Array(GAME_WIDTH).fill(' ')); }
+            drawArtAtPosition(screen, art, pos, colorOverride = null) { if (!art || !pos) return; art.forEach((line, dy) => { if (typeof line !== 'string') return; const y = Math.floor(pos.y + dy); if (y < 0 || y >= GAME_HEIGHT) return; for (let dx = 0; dx < line.length; dx++) { const x = Math.floor(pos.x + dx); if (x < 0 || x >= GAME_WIDTH) continue; const charToDraw = line[dx]; if (charToDraw !== ' ') { let spanClass = this.defaultColorClass; if (typeof colorOverride === 'function') spanClass = colorOverride(charToDraw, dx, dy, line) || spanClass; else if (typeof colorOverride === 'string') spanClass = colorOverride; const safeChar = this.escapeHTML(charToDraw); if(screen[y]) screen[y][x] = `<span class="${spanClass}">${safeChar}</span>`; } else { if (screen[y] && (screen[y][x] === undefined || (typeof screen[y][x] === 'string' && !screen[y][x].startsWith('<span')))) screen[y][x] = ' ';}}});}
+            drawBackground(screen) { const state = this.gameState; if (state.background && state.background.layers) { state.background.layers.forEach(layer => layer.forEach(element => { if (state.tick % element.speed === 0) { element.pos.y++; if (element.pos.y >= GAME_HEIGHT) { element.pos.y = 0; element.pos.x = Math.floor(Math.random()*GAME_WIDTH); }} if (element.pos.y >= 0 && element.pos.y < GAME_HEIGHT && element.pos.x >= 0 && element.pos.x < GAME_WIDTH && screen[Math.floor(element.pos.y)]) screen[Math.floor(element.pos.y)][Math.floor(element.pos.x)] = `<span class="${this.defaultColorClass}">${this.escapeHTML(element.char)}</span>`; }));} if (state.background && state.background.planets) { state.background.planets.forEach(planet => { if (state.tick % Math.floor(1/(planet.speed||0.1))===0) { planet.pos.y += 0.1; if (planet.pos.y-planet.size >= GAME_HEIGHT) { planet.pos.y = -(planet.size*2+1); planet.pos.x = Math.floor(Math.random()*GAME_WIDTH);}} const size = planet.size; for(let dy=-size; dy<=size; dy++) for(let dx=-size; dx<=size; dx++) if(dx*dx+dy*dy <= size*size) { const x=Math.floor(planet.pos.x+dx), y=Math.floor(planet.pos.y+dy); if(x>=0&&x<GAME_WIDTH&&y>=0&&y<GAME_HEIGHT && screen[y]) { const char = (dx*dx+dy*dy <= (size-1)*(size-1))?planet.innerChar:planet.char; screen[y][x] = `<span class="${this.defaultColorClass}">${this.escapeHTML(char)}</span>`; }}});} if (state.background && state.background.detailedElements) { state.background.detailedElements.forEach(element => { if(!element || !element.pos) return; if (state.tick % Math.floor(1/(element.speed||0.01))===0) { element.pos.y += 0.05; if (element.type === 'faded_planet' && element.art && element.pos.y > GAME_HEIGHT + element.art.length ) { element.pos.y = -(element.art.length || 0) - Math.random() * GAME_HEIGHT; element.pos.x = Math.floor(Math.random()*(GAME_WIDTH-(element.art[0] ? element.art[0].length : 10))); }} let artToDraw=element.art; if(element.animation){ element.frameTick=(element.frameTick||0)+1; if(element.frameTick>=element.frameSpeed){element.frameTick=0;element.currentFrame=(element.currentFrame+1)%element.animation.length;} artToDraw=element.animation[element.currentFrame];} if (artToDraw && element.pos.y >= GAME_HEIGHT && element.type !== 'faded_planet' && artToDraw.length > 0 ) { element.pos.y = -(artToDraw.length || 0) - Math.random()*20; element.pos.x = Math.floor(Math.random()*(GAME_WIDTH-(artToDraw[0]?artToDraw[0].length:10)));} if(artToDraw) this.drawArtAtPosition(screen, artToDraw, element.pos, element.type === 'faded_planet' ? 'faded-background-art' : this.defaultColorClass); });} return screen;}
+            getExplosionColor(char) { if(ASCII_ART.explosion && ASCII_ART.explosion[4] && ASCII_ART.explosion[4][3] && ('█▓'.includes(char) || char === ASCII_ART.explosion[4][3][Math.floor(ASCII_ART.explosion[4][3].length/2)])) return 'explosion-c1'; if(ASCII_ART.explosion && ASCII_ART.explosion[4] && ASCII_ART.explosion[4][1] && ('▒*@'.includes(char) || char === ASCII_ART.explosion[4][1][Math.floor(ASCII_ART.explosion[4][1].length/2)])) return 'explosion-c2'; if ('░\\|/-='.includes(char)) return 'explosion-c3'; return 'explosion-c4';}
+            drawExplosions(screen) { const state = this.gameState; if(state.player && state.player.explosions && ASCII_ART.explosion) state.player.explosions = state.player.explosions.filter(explosion => { explosion.frameTick++; if (explosion.frameTick >= explosion.frameSpeed) { explosion.frameTick=0; explosion.currentFrame++; } if (explosion.currentFrame >= ASCII_ART.explosion.length) return false; const art = ASCII_ART.explosion[explosion.currentFrame]; if (!art || !art[0]) return false; const drawPos = new Vector2(explosion.pos.x - Math.floor(art[0].length/2), explosion.pos.y - Math.floor(art.length/2)); this.drawArtAtPosition(screen, art, drawPos, (c) => this.getExplosionColor(c)); return true; }); return screen; }
+            drawLasers(screen) { const state = this.gameState; if(state.player && state.player.activeLasers) { state.player.activeLasers.forEach(laser => { if (laser.active && laser.startPos) { const colorClass = laser.isBlue ? 'laser-blue' : (laser.colorClass || 'laser-white'); let currentLaserY = Math.floor(laser.startPos.y) -1; let currentDrawX = Math.floor(laser.startPos.x); if (laser.isBlue && state.player.blueLaserModeActive && state.player.pos && state.player.currentArt && state.player.currentArt[0]) { currentLaserY = Math.floor(state.player.pos.y) -1; currentDrawX = Math.floor(state.player.pos.x + Math.floor(state.player.currentArt[0].length / 2) - Math.floor(laser.width/2)); } else if (laser.isBlue && !state.player.blueLaserModeActive) { return; } for (let y = currentLaserY; y >=0; y--) { if (y < GAME_HEIGHT && screen[y]) { for(let wOffset = 0; wOffset < laser.width; wOffset++) { const beamX = currentDrawX + wOffset; if(beamX >= 0 && beamX < GAME_WIDTH && screen[y]) screen[y][beamX] = `<span class="${colorClass}">${this.escapeHTML(laser.char)}</span>`;}}} } });} if(state.enemies) state.enemies.forEach(enemy => { if (enemy.activeLasers) { enemy.activeLasers.forEach(laser => { if (laser.active && laser.startPos) { for (let y = Math.floor(laser.startPos.y) + 1; y < GAME_HEIGHT; y++) { if (y >= 0 && screen[y]) { screen[y][Math.floor(laser.startPos.x)] = `<span class="${laser.colorClass || 'laser-white'}">${this.escapeHTML(laser.char)}</span>`; } } } }); } }); if(state.boss && state.boss.activeLasers) { state.boss.activeLasers.forEach(laser => { if(laser.active && laser.startPos) { for (let y = Math.floor(laser.startPos.y) + 1; y < GAME_HEIGHT; y++) { if (y >= 0 && laser.startPos.x >= 0 && laser.startPos.x < GAME_WIDTH && screen[y]) screen[y][Math.floor(laser.startPos.x)] = `<span class="${laser.colorClass || 'laser-green'}">${this.escapeHTML(laser.char)}</span>`;}}});}}
+                // Draw Ally Lasers
+                if(state.allies) {
+                    state.allies.forEach(ally => { 
+                        if (ally.activeLasers) { 
+                            ally.activeLasers.forEach(laser => { 
+                                if (laser.active && laser.startPos) { 
+                                    const colorClass = laser.colorClass || 'ally-laser-cyan'; 
+                                    // Ally lasers shoot upwards from their position
+                                    for (let y = Math.floor(laser.startPos.y) - 1; y >=0; y--) { 
+                                        if (y < GAME_HEIGHT && screen[y]) { 
+                                            for(let wOffset = 0; wOffset < laser.width; wOffset++) { 
+                                                const beamX = Math.floor(laser.startPos.x) + wOffset; 
+                                                if(beamX >= 0 && beamX < GAME_WIDTH && screen[y]) {
+                                                    screen[y][beamX] = `<span class="${colorClass}">${this.escapeHTML(laser.char)}</span>`; 
+                                                }
+                                            }
+                                        } 
+                                    } 
+                                } 
+                            }); 
+                        } 
+                    });
+                }
+            } // End of drawLasers method
+            drawSerpents(screen) { if(this.gameState.serpents) {this.gameState.serpents.forEach(serpent => { if(serpent.segments) {for (let i = serpent.segments.length - 1; i > 0; i--) { if(serpent.segments[i] && serpent.segments[i].pos) this.drawArtAtPosition(screen, ASCII_ART.serpentBody, serpent.segments[i].pos, 'serpent-body'); } if (serpent.segments.length > 0 && serpent.segments[0] && serpent.segments[0].pos) this.drawArtAtPosition(screen, ASCII_ART.serpentHead, serpent.segments[0].pos, 'serpent-head'); }}); }}
+            // Ally lasers are now drawn inside the main drawLasers method
+            // The following block was misplaced and caused a syntax error.
+            /*
+            if(state.allies) state.allies.forEach(ally => { if (ally.activeLasers) { ally.activeLasers.forEach(laser => { if (laser.active && laser.startPos) { const colorClass = laser.colorClass || 'ally-laser-cyan'; for (let y = Math.floor(laser.startPos.y) - 1; y >=0; y--) { if (y < GAME_HEIGHT && screen[y]) { for(let wOffset = 0; wOffset < laser.width; wOffset++) { const beamX = Math.floor(laser.startPos.x) + wOffset; if(beamX >= 0 && beamX < GAME_WIDTH && screen[y]) screen[y][beamX] = `<span class="${colorClass}">${this.escapeHTML(laser.char)}</span>`; } } } } }); } });
+            */
+        // } // This closing brace was also an error, likely part of the misplaced block or an extra.
+            drawBanners(screen) { if(this.gameState.activeBanners){this.gameState.activeBanners.forEach(banner => { if(banner.art && banner.pos) { if (banner.type === "talking" && banner.currentDisplay) { this.drawArtAtPosition(screen, banner.currentDisplay, banner.pos, 'banner-text'); } else if (banner.type !== "talking") { this.drawArtAtPosition(screen, banner.art, banner.pos, 'banner-text'); } }});}} // This method and subsequent ones are now correctly inside the class
+            drawPlayerShield(screen) { const player = this.gameState.player; if (player && player.shieldActive && ASCII_ART.hexStructure && ASCII_ART.hexStructure[player.shieldArtCurrentFrame]) { const shieldArt = ASCII_ART.hexStructure[player.shieldArtCurrentFrame]; if (shieldArt && player.currentArt && player.pos && shieldArt[0]) { const playerArt = player.currentArt; const shieldPosX = player.pos.x + Math.floor(playerArt[0].length / 2) - Math.floor(shieldArt[0].length / 2); const shieldPosY = player.pos.y + Math.floor(playerArt.length / 2) - Math.floor(shieldArt.length / 2); this.drawArtAtPosition(screen, shieldArt, new Vector2(shieldPosX, shieldPosY), 'shield-active');}}}
+            updateHUD() { const state = this.gameState; if (this.playerAvatarNameDiv && this.playerAvatarArtDiv && state.player) { this.playerAvatarNameDiv.textContent = `PILOT: ${state.hudName || "UNKNOWN"}`; this.playerAvatarArtDiv.innerHTML = (ASCII_ART.player_avatar || ["N/A"]).map(l => this.escapeHTML(l)).join('\n'); } if (this.enemyAvatarNameDiv && this.enemyAvatarArtDiv) { if (state.currentTargetEnemy) { this.enemyAvatarNameDiv.textContent = `TARGET: ${state.currentTargetEnemy.name}`; this.enemyAvatarArtDiv.innerHTML = (state.currentTargetEnemy.art || ["SCAN ERROR"]).map(l => this.escapeHTML(l)).join('\n'); } else { this.enemyAvatarNameDiv.textContent = "TARGET: CLEAR"; this.enemyAvatarArtDiv.innerHTML = "---<br>N/A<br>---"; }}}
+            drawAllies(screen) { const state = this.gameState; if (state.allies) { state.allies.forEach(ally => { if (ally && ally.art && ally.pos) { this.drawArtAtPosition(screen, ally.art, ally.pos, 'ally-green'); } }); } }
+            render() {
+                try {
+                    this.updateHUD(); 
+                    const state = this.gameState; if (!state) { if(this.gameArea) this.gameArea.innerHTML = "Error: Game state is null in render."; return; }
+                    let screen = this.clearScreen();
+                    // Moved ally laser drawing into the main drawLasers method.
+                    // The old misplaced block was here:
+                    // if(state.allies) state.allies.forEach(ally => { if (ally.activeLasers) { ally.activeLasers.forEach(laser => { if (laser.active && laser.startPos) { const colorClass = laser.colorClass || 'ally-laser-cyan'; for (let y = Math.floor(laser.startPos.y) - 1; y >=0; y--) { if (y < GAME_HEIGHT && screen[y]) { for(let wOffset = 0; wOffset < laser.width; wOffset++) { const beamX = Math.floor(laser.startPos.x) + wOffset; if(beamX >= 0 && beamX < GAME_WIDTH && screen[y]) screen[y][beamX] = `<span class="${colorClass}">${this.escapeHTML(laser.char)}</span>`; } } } } }); } });
+                    // The '}' that was here was also an error.
+
+                    if (state.gameOver) { const GOMsg = "G A M E   O V E R"; const SCMsg = `FINAL SCORE: ${state.score}`; const RMsg = "Refresh to play again."; const NMsg = `Pilot: ${state.hudName || "UNKNOWN"}`; const msgY = Math.floor(GAME_HEIGHT/2)-4; const deathArt = ASCII_ART.deathSymbol; const deathArtY = msgY + 2; const deathArtX = Math.floor((GAME_WIDTH - GOMsg.length)/2) - (deathArt && deathArt[0] ? deathArt[0].length : 0) - 3; if(deathArt) this.drawArtAtPosition(screen, deathArt, new Vector2(deathArtX, deathArtY), 'death-symbol-color'); [NMsg, "", GOMsg, "", SCMsg, "", RMsg].forEach((line, idx) => { const y = msgY+idx; if(y>=0&&y<GAME_HEIGHT && screen[y]) { const x = Math.floor((GAME_WIDTH-line.length)/2); for(let i=0;i<line.length;i++) if(x+i>=0&&x+i<GAME_WIDTH) screen[y][x+i]=`<span class="${idx === 0 ? 'hud-name' : this.defaultColorClass}">${this.escapeHTML(line[i])}</span>`; } }); if(state.player && state.player.explosions) screen = this.drawExplosions(screen); if(this.gameArea) this.gameArea.innerHTML = screen.map(row => row.map(cell => cell || ' ').join('')).join('\n'); return; }
+                    screen = this.drawBackground(screen);
+                    if(state.player && state.player.currentArt && state.player.pos) this.drawArtAtPosition(screen, state.player.currentArt, state.player.pos, 'player-orange'); // Player is now orange
+                    this.drawPlayerShield(screen); 
+                    if(state.enemies) state.enemies.forEach(enemy => { if (enemy && enemy.art && enemy.pos) this.drawArtAtPosition(screen, enemy.art, enemy.pos, this.defaultColorClass); });
+                    this.drawSerpents(screen); 
+                    this.drawAllies(screen); 
+                    if (state.boss && state.boss.art && state.boss.pos) this.drawArtAtPosition(screen, state.boss.art, state.boss.pos, this.defaultColorClass);
+                    if(state.powerUps) state.powerUps.forEach(pu => {if (pu && pu.art && pu.pos) this.drawArtAtPosition(screen, pu.art, pu.pos, 'powerup-text');});
+                    
+                    // Call the class method for drawing projectiles
+                    if(state.player && state.player.projectiles) this.drawProjectilesWithArt(screen, state.player.projectiles, 'bullet-orange'); 
+                    if(state.enemies) state.enemies.forEach(enemy => { if(enemy && enemy.projectiles) this.drawProjectilesWithArt(screen, enemy.projectiles, 'text-default'); }); 
+                    if (state.boss && state.boss.projectiles) this.drawProjectilesWithArt(screen, state.boss.projectiles, 'text-default');
+                    // Draw ally projectiles
+                    if (state.allies) {
+                        state.allies.forEach(ally => {
+                            if (ally && ally.projectiles) {
+                                this.drawProjectilesWithArt(screen, ally.projectiles, 'ally-laser-cyan'); // Default for ally bullets if type not matched
+                            }
+                        });
+                    }
+                    this.drawLasers(screen); this.drawBanners(screen); 
+                    if(state.player && state.player.explosions) screen = this.drawExplosions(screen);
+                    let htmlRows = screen.map(row => row.map(cell => cell || ' ').join('')); let htmlScreen = htmlRows.join('\n');
+                    const statPrefix = CHAR_SETS.shapes[Math.floor(Math.random()*CHAR_SETS.shapes.length)];
+                    let weaponDisplay = state.player && state.player.selectedWeapon ? state.player.selectedWeapon.toUpperCase() : "N/A"; if (state.player && state.player.selectedWeapon === 'laser' && state.player.laserCharges === 0) weaponDisplay += " (EMPTY)"; if (state.player && state.player.blueLaserModeActive) weaponDisplay = "BLUE OVERCHARGE";
+                    let shieldStatus = state.player ? (state.player.shieldActive ? ` ACTIVE (${Math.ceil(state.player.shieldTicksLeft/60)}s)` : ` (${state.player.shieldCharges})`) : " (0)";
+                    let augStatus = ""; if(state.player && state.player.augmentationLevel === 1) augStatus = " | SHIP LARGE!"; if(state.player && state.player.augmentationLevel === 2) augStatus = " | SHIP AUGMENTED!";
+                    let stats = `\n\n<span class="${this.defaultColorClass}">${this.escapeHTML(statPrefix)} <span class="hud-name-ingame">${this.escapeHTML(state.hudName || "PILOT")}</span> | Score: ${state.score} | Health: ${state.player ? state.player.health : 'N/A'} | Lasers: ${state.player ? state.player.laserCharges : 'N/A'} | Weapon: ${this.escapeHTML(weaponDisplay)} | Shield: ${this.escapeHTML(shieldStatus)}${augStatus}`;
+                    if(state.boss && typeof state.boss.health !== 'undefined') stats += ` | Boss HP: ${state.boss.health}`; if(state.player && state.player.manualControl) stats += ` | MANUAL MODE`; stats += `</span>`;
+                    if(this.gameArea) this.gameArea.innerHTML = htmlScreen + stats;
+                } catch (e) { console.error("RENDERING CRASH:", e); if(this.gameArea) this.gameArea.innerHTML = `<div><pre style="color:red; font-size:10px;">RENDERING CRASH:\n${e.message}\n${e.stack}</pre></div>`; }
+            }
+            drawProjectilesWithArt(screen, projectileList, defaultColor = 'bullet-orange') {
+                if(projectileList) {
+                    projectileList.forEach(proj => {
+                        if(proj && proj.art && proj.pos) {
+                            let color = defaultColor;
+                            if (proj.type === 'ally_bullet') {
+                                color = 'ally-laser-cyan'; 
+                            } else if (proj.type === 'enemy' || proj.type === 'boss' || proj.type === 'enemy_serpent_shot') {
+                                color = 'text-default'; // Enemy/Boss bullets are default color (cyan on black bg)
+                            }
+                            // Player bullets will use defaultColor ('bullet-orange') if not overridden by type
+                            this.drawArtAtPosition(screen, proj.art, proj.pos, color);
+                        }
+                    });
+                }
+            }
+        }
+        console.log("AsciiRenderer class defined.");
+        document.getElementById('gameArea').textContent = "Stage 4: AsciiRenderer Defined. Defining GameLogic...";
+
+        class GameLogic {
+            constructor(gameState, renderer) { this.state = gameState; this.renderer = renderer; this.explosionFrameSpeed = 3; this.playerLaserDuration = 30; this.enemyLaserDuration = 20; this.megaBossLaserDuration = 45; this.megaBossMissileCooldown = 100; this.serpentMoveInterval = 4; this.serpentRegrowCooldown = 120; this.serpentShootCooldown = 25; this.serpentSpawnCooldown = 300; this.lastSerpentSpawnTick = -this.serpentSpawnCooldown; this.keys = {}; this.setupInputHandlers(); this.gamePaceTargetTime = 7 * 60 * 60; this.playerInvincibilityDuration = 90; this.playerShieldDuration = 300; this.playerShieldDamage = 5; this.shieldArtMaxFrames = ASCII_ART.hexStructure ? ASCII_ART.hexStructure.length : 0; this.enemySlowdownActive = false; this.enemySlowdownTicksLeft = 0; this.enemyOriginalMoveThresholds = new Map(); this.enemyBaseMoveThreshold = 4; this.playerBlueLaserDuration = 240; this.playerBlueLaserCooldownMax = 1200;}
+            setupInputHandlers() { document.addEventListener('keydown', (e) => { this.keys[e.key.toLowerCase()] = true; this.handleSingleKeyPress(e.key.toLowerCase()); }); document.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; }); }
+            handleSingleKeyPress(key) {
+                if (['1','2','3','4','5','7'].includes(key)) { if(this.state) this.state.fullReset(parseInt(key)); return; }
+                if (this.state.gameOver) return;
+                const player = this.state.player;
+                if(!player) return;
+
+                const availableWeapons = ['bullet', 'laser']; // Define available weapons
+                let currentWeaponIndex = availableWeapons.indexOf(player.selectedWeapon);
+
+                if (key === '+' || key === '=') { // '+' often needs Shift, '=' is unshifted
+                    currentWeaponIndex = (currentWeaponIndex + 1) % availableWeapons.length;
+                    player.selectedWeapon = availableWeapons[currentWeaponIndex];
+                } else if (key === '-') {
+                    currentWeaponIndex = (currentWeaponIndex - 1 + availableWeapons.length) % availableWeapons.length;
+                    player.selectedWeapon = availableWeapons[currentWeaponIndex];
+                } else if (key === 'p') { player.manualControl = !player.manualControl; if (!player.manualControl) { player.direction = player.direction === 0 ? 1 : player.direction; player.randomMoveTicks = 0; } return; 
+                } else if (key === 'x' && !player.shieldActive && player.shieldCharges > 0) { this.activatePlayerShield(); 
+                } else if (key === 'b' && player && !player.blueLaserModeActive && player.blueLaserCooldown === 0) { this.activatePlayerBlueLaser(); 
+                } else if (key === 'h') { // Ally spawn key - now global
+                    this.spawnAllyFlood();
+                } else if (key === 't') { // Banner display key (changed from 'd' back to 't')
+                    if (this.state && typeof this.state.addBanner === 'function' && ASCII_ART) {
+                        if (ASCII_ART.banner_docPixel) {
+                            this.state.addBanner(ASCII_ART.banner_docPixel, "DOC PIXEL", "talking"); 
+                        }
+                        setTimeout(() => { 
+                            if (this.state && typeof this.state.addBanner === 'function' && ASCII_ART.banner_thereminou) {
+                                this.state.addBanner(ASCII_ART.banner_thereminou, "THEREMINOU", "talking"); 
+                                const secondBanner = this.state.activeBanners[this.state.activeBanners.length - 1]; 
+                                if (secondBanner && secondBanner.type === 'talking') { secondBanner.speed = 0.8; } 
+                            }
+                        }, 1200); // Adjusted delay slightly from 2000ms
+                    }
+                } else if (player.manualControl) { 
+                    if (key === 'shift') { /* Shift used to be weapon toggle, now handled by +/- */ } 
+                    else if (key === ' ') { if (player.selectedWeapon === 'laser') this.firePlayerLaser(); }
+                } else { // Autopilot mode
+                    if (key === 'l') this.firePlayerLaser(); 
+                }
+            }
+            createExplosion(position) { if(this.state.player && this.state.player.explosions && ASCII_ART.explosion) this.state.player.explosions.push({ pos:new Vector2(position.x,position.y),animation:ASCII_ART.explosion,currentFrame:0,frameTick:0,frameSpeed:this.explosionFrameSpeed}); }
+            firePlayerLaser(isBlue = false) { const player = this.state.player; if(!player) return; if (isBlue) { if(!player.blueLaserModeActive || (player.activeLasers && player.activeLasers.find(l => l.isBlue && l.active))) return; } else { if(player.laserCharges <= 0 || (player.activeLasers && player.activeLasers.find(l => !l.isBlue && l.active))) return; if (!isBlue) player.laserCharges--;} const playerArt = player.currentArt; let laserWidth = player.isLarge ? 5 : 3; let laserChar = player.isLarge ? '█' : '║'; let damage = (player.isLarge ? 3 : 2) * player.laserDamageMultiplier; let color = 'laser-white'; let blueFlag = false; let duration = this.playerLaserDuration; if(isBlue){ laserWidth = player.isAugmented ? 7 : 5; laserChar = '█'; damage = player.projectileDamage * player.laserDamageMultiplier * 2; color = 'laser-blue'; blueFlag = true; duration = player.blueLaserTicksLeft > 0 ? player.blueLaserTicksLeft : this.playerBlueLaserDuration; } if (!player.activeLasers) player.activeLasers = []; const spawnX = player.pos.x + Math.floor(playerArt[0].length / 2) - Math.floor(laserWidth/2); player.activeLasers.push({ startPos: new Vector2(spawnX , player.pos.y), currentDrawX: spawnX, currentDrawY: player.pos.y, active: true, duration: duration, char: laserChar, width: laserWidth, damage: damage, colorClass: color, isBlue: blueFlag }); }
+            activatePlayerShield() { const player = this.state.player; if (player.shieldCharges > 0 && !player.shieldActive) { player.shieldCharges--; player.shieldActive = true; player.shieldTicksLeft = this.playerShieldDuration; player.shieldArtCurrentFrame = 0; player.shieldArtFrameTick = 0; }}
+            activatePlayerBlueLaser() { const player = this.state.player; if (!player.blueLaserModeActive && player.blueLaserCooldown === 0) { player.blueLaserModeActive = true; player.blueLaserTicksLeft = this.playerBlueLaserDuration; player.blueLaserCooldown = this.playerBlueLaserCooldownMax; this.state.addBanner(ASCII_ART.banner_systemOverride, "BLUE LASER OVERRIDE", "talking"); this.firePlayerLaser(true); }}
+            spawnAllyFlood() {
+                const state = this.state;
+                if (!state.player || !ASCII_ART.allyShip) return;
+                const numAllies = 5 + Math.floor(Math.random() * 5); // Spawn 5-9 allies
+                for (let i = 0; i < numAllies; i++) {
+                    // Spawn allies near the player, slightly offset
+                    const offsetX = (Math.random() - 0.5) * 20; // Random X offset around player
+                    const offsetY = Math.random() * 10 + 5;    // Spawn slightly behind player
+                    const spawnX = Math.max(0, Math.min(GAME_WIDTH - ASCII_ART.allyShip[0].length, state.player.pos.x + offsetX));
+                    const spawnY = Math.max(0, Math.min(GAME_HEIGHT - ASCII_ART.allyShip.length, state.player.pos.y + offsetY));
+                    
+                    const formationOffsetX = (i % 2 === 0 ? -1 : 1) * (Math.floor(i / 2) + 1) * (ASCII_ART.allyShip[0].length + 2); // Spread them out
+                    const weaponChoice = Math.random() < 0.6 ? 'bullet' : 'laser'; // 60% chance for bullets
+
+                    state.allies.push({
+                        pos: new Vector2(spawnX, spawnY),
+                        art: ASCII_ART.allyShip,
+                        targetOffsetX: formationOffsetX, // Target X offset from player
+                        targetOffsetY: - (ASCII_ART.player.length + 2), // Target Y offset (behind player)
+                        speedY: -1.2, // Default upward speed for departure mode
+                        lifeSpan: 180 + Math.floor(Math.random() * 120), // Lasts 3-5 seconds
+                        departureMode: false,
+                        selectedWeapon: weaponChoice,
+                        bulletCooldown: weaponChoice === 'bullet' ? 20 + Math.floor(Math.random() * 20) : 0,
+                        laserCooldown: weaponChoice === 'laser' ? 70 + Math.floor(Math.random() * 40) : 0,
+                        projectiles: [], // For bullets
+                        activeLasers: [], // For lasers
+                        damage: weaponChoice === 'bullet' ? 8 : 5 // Bullets do a bit more, lasers are continuous
+                    });
+                }
+                console.log(`Spawned ${numAllies} allies.`);
+            }
+            firePlayerBullet(spawnX, spawnYOffset = -1) { const player = this.state.player; if(!player.projectiles) player.projectiles = []; player.projectiles.push({ pos:new Vector2(spawnX - Math.floor(ASCII_ART.bullet[0].length / 2), player.pos.y + spawnYOffset), art:ASCII_ART.bullet, type:'player', damage: player.projectileDamage });}
+            updatePlayer() { const player = this.state.player; if(!player || !player.currentArt) return; const playerArt = player.currentArt; const playerWidth = playerArt[0].length; if (player.invincibilityTicks > 0) player.invincibilityTicks--; if (player.shieldActive) { player.shieldTicksLeft--; player.shieldArtFrameTick++; if (player.shieldArtFrameTick >= player.shieldArtFrameSpeed) { player.shieldArtFrameTick = 0; player.shieldArtCurrentFrame = (player.shieldArtCurrentFrame + 1) % this.shieldArtMaxFrames; } if (player.shieldTicksLeft <= 0) player.shieldActive = false; }
+                if (player.blueLaserModeActive) { player.blueLaserTicksLeft--; if (this.state.tick % 2 === 0 && player.activeLasers.filter(l => l.isBlue && l.active).length === 0 && player.blueLaserTicksLeft > 5 ) { this.firePlayerLaser(true); } if (player.blueLaserTicksLeft <= 0) { player.blueLaserModeActive = false; if (player.activeLasers) player.activeLasers = player.activeLasers.filter(l => !l.isBlue || l.duration <=0); } } else if (player.blueLaserCooldown > 0) { player.blueLaserCooldown--; }
+                if (player.augmentationLevel < 2 && this.state.score >= (player.augmentationLevel === 0 ? player.augmentationThreshold : player.nextAugmentationThreshold) && this.state.tick > 60 * (player.augmentationLevel === 0 ? 45 : 150) ) { player.augmentationLevel++; if (player.augmentationLevel === 1) { player.isLarge = true; player.currentArt = ASCII_ART.player_large; this.state.addBanner(["SHIP SYSTEMS ENHANCED!"], "LARGE SHIP", "talking"); } else if (player.augmentationLevel === 2) { player.isAugmented = true; player.currentArt = ASCII_ART.player_augmented; this.state.addBanner(ASCII_ART.banner_shipAugmented, "SHIP SYSTEMS AUGMENTED!", "talking"); } if(player.pos.x + player.currentArt[0].length > GAME_WIDTH) player.pos.x = GAME_WIDTH - player.currentArt[0].length; if(player.pos.y + player.currentArt.length > GAME_HEIGHT) player.pos.y = GAME_HEIGHT - player.currentArt.length; }
+                
+                let speedMultiplier = 1.0;
+                if (player.augmentationLevel === 0) {
+                    speedMultiplier = 0.75; // Slower at base
+                } else if (player.augmentationLevel === 1) {
+                    speedMultiplier = 1.0; // Normal at large
+                } else if (player.augmentationLevel >= 2) {
+                    speedMultiplier = 1.25; // Faster when augmented
+                }
+
+                if (player.manualControl) { let dx = 0, dy = 0; if (this.keys['arrowleft']) dx = -1.5 * speedMultiplier; if (this.keys['arrowright']) dx = 1.5 * speedMultiplier; if (this.keys['arrowup']) dy = -1.5 * speedMultiplier; if (this.keys['arrowdown']) dy = 1.5 * speedMultiplier; player.pos.x = Math.max(0, Math.min(GAME_WIDTH - playerWidth, player.pos.x + dx)); player.pos.y = Math.max(0, Math.min(GAME_HEIGHT - playerArt.length, player.pos.y + dy)); const manualFireRate = player.isLarge ? (player.isAugmented?1:1):2; if (this.keys['control'] && this.state.tick % manualFireRate === 0) { const centerX = player.pos.x + Math.floor(playerWidth/2); this.firePlayerBullet(centerX); if(player.isAugmented) {this.firePlayerBullet(player.pos.x + 1); this.firePlayerBullet(player.pos.x + playerWidth - 2); if(this.state.tick % 2 === 0) {this.firePlayerBullet(player.pos.x + 3); this.firePlayerBullet(player.pos.x + playerWidth - 4);}} else if (player.isLarge) { this.firePlayerBullet(centerX - 2); this.firePlayerBullet(centerX + 2);}}
+                } else { if (player.randomMoveTicks <= 0) {player.direction=Math.random()>0.5?1:-1; player.randomMoveTicks=Math.floor(Math.random()*10)+5; if(Math.random()<0.1)player.direction=0;} else {player.randomMoveTicks--;} player.pos.x += player.direction * 1.5 * speedMultiplier; if (player.pos.x <= 0) {player.pos.x=0;player.direction*=-1;} if (player.pos.x+playerWidth >= GAME_WIDTH) {player.pos.x=GAME_WIDTH-playerWidth;player.direction*=-1;} const autoFireRate = player.isLarge ? (player.isAugmented ? player.baseFireRate-2.8 : player.baseFireRate-2) : player.baseFireRate -1.5; const maxProjectiles = player.isAugmented ? 25 : (player.isLarge ? 18 : 12); if (this.state.tick % Math.max(1, Math.floor(autoFireRate)) === 0 && player.projectiles.length < maxProjectiles) { const centerX = player.pos.x + Math.floor(playerWidth/2); this.firePlayerBullet(centerX); if(player.isAugmented) {this.firePlayerBullet(player.pos.x + 1); this.firePlayerBullet(player.pos.x + playerWidth - 2);this.firePlayerBullet(player.pos.x + 3); this.firePlayerBullet(player.pos.x + playerWidth - 4);} else if (player.isLarge) { this.firePlayerBullet(centerX-2); this.firePlayerBullet(centerX+2);this.firePlayerBullet(centerX-4); this.firePlayerBullet(centerX+4);}}
+                }
+                if(player.activeLasers) {player.activeLasers = player.activeLasers.filter(l => { l.duration--; if(l.isBlue && player.blueLaserModeActive && l.duration < player.blueLaserTicksLeft) {l.duration = player.blueLaserTicksLeft; l.currentDrawX = player.pos.x + Math.floor(player.currentArt[0].length / 2) - Math.floor(l.width/2); l.currentDrawY = player.pos.y;} return l.duration > 0; }); if (player.activeLasers.length > 0 && player.activeLasers[0]) player.activeLasers[0].active = player.activeLasers[0].duration > 0;}
+            }
+            spawnPowerUp() { const state = this.state; if(!state.player || !state.powerUps) return; if (state.powerUps.length < 2) { if (Math.random() < 0.01 && state.player.augmentationLevel === 0) { state.powerUps.push({ pos:new Vector2(Math.floor(Math.random()*(GAME_WIDTH-(ASCII_ART.powerUp_sizeIncrease && ASCII_ART.powerUp_sizeIncrease[0] ? ASCII_ART.powerUp_sizeIncrease[0].length : 5))),0), art:ASCII_ART.powerUp_sizeIncrease, type:'size_increase', speed:1 }); } else if (Math.random() < 0.005 && state.player.augmentationLevel === 1 && state.player.augmentationLevel < 2) { state.powerUps.push({pos: new Vector2(Math.floor(Math.random()*(GAME_WIDTH-(ASCII_ART.powerUp_augment[0].length))),0), art: ASCII_ART.powerUp_augment, type: 'augment_pickup', speed: 1});} else if (Math.random() < 0.009) { state.powerUps.push({ pos:new Vector2(Math.floor(Math.random()*(GAME_WIDTH-(ASCII_ART.powerUp_laserCharge && ASCII_ART.powerUp_laserCharge[0] ? ASCII_ART.powerUp_laserCharge[0].length : 5))),0), art:ASCII_ART.powerUp_laserCharge, type:'laser_charge', speed:1.2 }); } else if (Math.random() < 0.007 && state.player.shieldCharges < 3) { state.powerUps.push({ pos:new Vector2(Math.floor(Math.random()*(GAME_WIDTH-(ASCII_ART.powerUp_shieldCharge && ASCII_ART.powerUp_shieldCharge[0] ? ASCII_ART.powerUp_shieldCharge[0].length : 5))),0), art:ASCII_ART.powerUp_shieldCharge, type:'shield_charge', speed:1.1 });}} }
+            updatePowerUps() { if(this.state.powerUps) this.state.powerUps.forEach((pu, i) => { pu.pos.y += pu.speed; if (pu.pos.y > GAME_HEIGHT) this.state.powerUps.splice(i,1); }); }
+            updateAllies() {
+                const state = this.state;
+                const player = state.player;
+
+                if (state.allies) {
+                    state.allies = state.allies.filter(ally => {
+                        if (!ally || !ally.pos || !ally.art || !ally.art[0]) return false;
+
+                        if (!ally.departureMode) {
+                            ally.lifeSpan--;
+                            if (ally.lifeSpan <= 0) {
+                                ally.departureMode = true;
+                            }
+
+                            // Movement: Try to stay in formation relative to player
+                            if (player && player.pos) {
+                                const targetX = player.pos.x + ally.targetOffsetX;
+                                const targetY = player.pos.y + ally.targetOffsetY;
+                                
+                                // Smoothly move towards target formation position
+                                const moveFactor = 0.1;
+                                ally.pos.x += (targetX - ally.pos.x) * moveFactor;
+                                ally.pos.y += (targetY - ally.pos.y) * moveFactor;
+
+                                // Clamp position to screen
+                                ally.pos.x = Math.max(0, Math.min(GAME_WIDTH - ally.art[0].length, ally.pos.x));
+                                ally.pos.y = Math.max(0, Math.min(GAME_HEIGHT - ally.art.length, ally.pos.y));
+                            }
+
+                            // Firing Logic
+                            if (ally.selectedWeapon === 'laser') {
+                                ally.laserCooldown--;
+                                if (ally.laserCooldown <= 0) {
+                                    if (!ally.activeLasers) ally.activeLasers = [];
+                                    const laserWidth = 1;
+                                    const laserChar = '|';
+                                    const laserColor = 'ally-laser-cyan';
+                                    const spawnX = ally.pos.x + Math.floor(ally.art[0].length / 2);
+                                    ally.activeLasers.push({ startPos: new Vector2(spawnX, ally.pos.y), active: true, duration: 20, char: laserChar, width: laserWidth, damage: ally.damage, colorClass: laserColor });
+                                    ally.laserCooldown = 70 + Math.floor(Math.random() * 40); 
+                                }
+                            } else if (ally.selectedWeapon === 'bullet') {
+                                ally.bulletCooldown--;
+                                if (ally.bulletCooldown <= 0) {
+                                    if (!ally.projectiles) ally.projectiles = [];
+                                    const spawnX = ally.pos.x + Math.floor(ally.art[0].length / 2);
+                                    const spawnY = ally.pos.y; // Fire from front of ally
+                                    ally.projectiles.push({
+                                        pos: new Vector2(spawnX - Math.floor(ASCII_ART.bullet[0].length / 2), spawnY),
+                                        art: ASCII_ART.bullet,
+                                        type: 'ally_bullet', 
+                                        speedY: -1.5, // Move upwards
+                                        damage: ally.damage 
+                                    });
+                                    ally.bulletCooldown = 25 + Math.floor(Math.random() * 15);
+                                }
+                            }
+                        } else {
+                            // Departure mode: Fly straight up
+                            ally.pos.y += ally.speedY;
+                        }
+                        
+                        // Update ally bullets (movement only, collision handled in updateProjectiles)
+                        if (ally.projectiles) {
+                            ally.projectiles = ally.projectiles.filter(proj => {
+                                if (!proj || !proj.pos) return false;
+                                // Movement is now handled in updateProjectiles to centralize it before collision checks
+                                // proj.pos.y += proj.speedY; 
+                                return proj.pos.y + (proj.art ? proj.art.length : 0) > 0 && proj.pos.y < GAME_HEIGHT; // Keep if on screen
+                            });
+                        }
+                        // Update ally lasers
+                        if (ally.activeLasers) {
+                            ally.activeLasers = ally.activeLasers.filter(l => { l.duration--; return l.duration > 0; });
+                            if (ally.activeLasers.length > 0 && ally.activeLasers[0]) ally.activeLasers[0].active = ally.activeLasers[0].duration > 0;
+                        }
+
+                        return ally.pos.y + ally.art.length > 0; // Keep if on screen
+                    });
+                }
+            }
+            startEnemySpawnEvent(type = 'flood', duration = 120, spawnInterval = 5) { duration = Math.max(300, duration + Math.floor(this.state.difficulty * 120)); spawnInterval = Math.max(1, spawnInterval - Math.floor(this.state.difficulty * 0.8)); this.state.enemySpawnEvent = { type, duration, spawnInterval, ticksUntilNextSpawn: 0, initialDelay: 30 }; if (type === 'flood' && !this.state.activeBanners.find(b => b.text.includes("INCOMING"))) { this.state.addBanner(ASCII_ART.banner_waveIncoming, "WAVE INCOMING!", "talking"); } else if (type === 'mixed_mode3' && !this.state.activeBanners.find(b => b.text.includes("SECTOR 3"))) { this.state.addBanner([ " SSSSSS EEEEEEE  CCCCCC TTTTTTT  OOOOO  RRRRRR      33333 ", "SS      EE      CC        TTT   OO   OO RR   RR     33  33", " SSSSSS EEEEEEE CC        TTT   OO   OO RRRRRR         33 ", "     SS EE      CC        TTT   OO   OO RR  RR      33  33", " SSSSSSS EEEEEEE  CCCCCC   TTT    OOOO0  RR   RR     33333 " ], "ENTERING SECTOR 3", "talking");} else if (type === 'station_defense' && !this.state.activeBanners.find(b => b.text.includes("STATION"))) {this.state.addBanner(["DEFEND THE STATION!"],"STATION DEFENSE WAVE", "talking");}}
+            spawnEnemies() { const state = this.state; if (state.boss && state.enemySpawnEvent && state.enemySpawnEvent.type === 'boss_adds') { state.enemySpawnEvent.ticksUntilNextSpawn--; if (state.enemySpawnEvent.ticksUntilNextSpawn <= 0) { this.spawnSingleEnemy(false, true); state.enemySpawnEvent.ticksUntilNextSpawn = state.enemySpawnEvent.spawnInterval; } return; } if (state.boss) return;
+                if (state.enemySpawnEvent && (state.enemySpawnEvent.type === 'mixed_mode3' || state.enemySpawnEvent.type === 'station_defense')) { if (state.enemySpawnEvent.initialDelay > 0) { state.enemySpawnEvent.initialDelay--; return; } state.enemySpawnEvent.duration--; state.enemySpawnEvent.ticksUntilNextSpawn--; if (state.enemySpawnEvent.ticksUntilNextSpawn <= 0) { const rand = Math.random(); if (state.enemySpawnEvent.type === 'station_defense') { if(rand < 0.5) this.spawnSingleEnemy(true, false, 'laserEnemy_scout'); else this.spawnSingleEnemy(false, false, 'laserEnemy_standard');} else { if (rand < 0.3) this.spawnSingleEnemy(false, false, 'laserEnemy_scout'); else if (rand < 0.55) this.spawnSingleEnemy(true, false, 'laserEnemy_standard'); else if (rand < 0.75) this.spawnSingleEnemy(false, false, 'laserEnemy_heavy'); else this.spawnSingleEnemy(false, false, 'basic');} state.enemySpawnEvent.ticksUntilNextSpawn = state.enemySpawnEvent.spawnInterval; } if (state.enemySpawnEvent.duration <= 0) state.enemySpawnEvent = null; return; }
+                if (state.enemySpawnEvent) { if (state.enemySpawnEvent.initialDelay > 0) { state.enemySpawnEvent.initialDelay--; return; } state.enemySpawnEvent.duration--; state.enemySpawnEvent.ticksUntilNextSpawn--; if (state.enemySpawnEvent.ticksUntilNextSpawn <= 0) { this.spawnSingleEnemy(state.enemySpawnEvent.type === 'hang_mid'); state.enemySpawnEvent.ticksUntilNextSpawn = state.enemySpawnEvent.spawnInterval; } if (state.enemySpawnEvent.duration <= 0) state.enemySpawnEvent = null; return; }
+                if (state.tick > 150 && !state.enemySpawnEvent && Math.random() < (0.0025 + 0.0008 * state.difficulty)) { this.startEnemySpawnEvent(); return; } if (Math.random() < (0.012 + 0.004 * state.difficulty)) { this.spawnSingleEnemy(Math.random() < 0.15); }
+                const timeBasedMegaBossTrigger = state.tick > this.gamePaceTargetTime * 0.9 && state.score > 4500; const scoreBasedMegaBossTrigger = state.score > 6000;
+                if (!state.boss && (timeBasedMegaBossTrigger || scoreBasedMegaBossTrigger) && state.difficulty >= 2.0) { this.spawnBoss('mega'); if(state.boss) {state.enemySpawnEvent = { type: 'boss_adds', duration: Infinity, spawnInterval: 100 - Math.floor(state.difficulty * 10), ticksUntilNextSpawn: 50, initialDelay: 0 }; state.addBanner(ASCII_ART.banner_bossIncoming, "MEGA BOSS ALERT!", "talking");} }
+                else if (!state.boss && state.score > 2000 && state.difficulty >= 1.0 && state.tick > this.gamePaceTargetTime * 0.20 && state.tick < this.gamePaceTargetTime * 0.8 ) {
+                     if (state.serpents.length < 1 && state.tick > this.lastSerpentSpawnTick + this.serpentSpawnCooldown && Math.random() < (0.01 + 0.003 * state.difficulty) && !state.boss && state.score > 2500 ) { this.spawnSerpent(); this.lastSerpentSpawnTick = state.tick; if (!state.activeBanners.find(b => b.text.includes("SERPENT"))) { this.state.addBanner(ASCII_ART.banner_serpentSighted, "SERPENT DETECTED!", "talking"); } } 
+                     else if (!state.boss && state.tick > this.gamePaceTargetTime * 0.35 && (!state.serpents || state.serpents.length === 0)) { this.spawnBoss('regular'); if(state.boss){state.enemySpawnEvent = { type: 'boss_adds', duration: Infinity, spawnInterval: 150 - Math.floor(state.difficulty * 15), ticksUntilNextSpawn: 75, initialDelay: 0 }; state.addBanner(ASCII_ART.banner_bossIncoming, "BOSS APPROACHING!", "talking"); } }
+                }
+            }
+            spawnSingleEnemy(hangMidScreen = false, isBossAdd = false, forcedType = null) { const state = this.state; if (state.enemies.length + (state.serpents ? state.serpents.reduce((acc,s)=>acc+(s.segments ? s.segments.length : 0),0) : 0) > (isBossAdd ? 6 : (15 + state.difficulty * 7))) return; 
+                let enemyType = forcedType || (isBossAdd ? 'basic_add' : 'basic'); let enemyArt = ASCII_ART.basicEnemy;
+                if (forcedType) { switch(forcedType) { case 'laserEnemy_scout': enemyArt = ASCII_ART.laserEnemy_scout; enemyType='laserEnemy_scout'; break; case 'laserEnemy_standard': enemyArt = ASCII_ART.laserEnemy_standard; enemyType='laserEnemy_standard'; break; case 'laserEnemy_heavy': enemyArt = ASCII_ART.laserEnemy_heavy; enemyType='laserEnemy_heavy'; break; default: enemyArt = ASCII_ART.basicEnemy; enemyType = 'basic'; }}
+                else if (!isBossAdd) { const r = Math.random(); if (r < 0.15 && state.score > 1000 && state.difficulty > 1.2) { enemyType = 'laserEnemy_heavy'; enemyArt = ASCII_ART.laserEnemy_heavy;} else if (r < 0.40 && state.score > 300) { enemyType = 'laserEnemy_standard'; enemyArt = ASCII_ART.laserEnemy_standard;} else if (r < 0.65 && state.score > 100) { enemyType = 'laserEnemy_scout'; enemyArt = ASCII_ART.laserEnemy_scout;} else { enemyType = 'basic'; enemyArt = ASCII_ART.basicEnemy; }}
+                else { enemyType = 'basic_add'; enemyArt = ASCII_ART.basicEnemy; }
+                if(!enemyArt || !enemyArt[0]) { console.warn("Missing art for enemy type:", enemyType); enemyArt = ASCII_ART.basicEnemy; }
+                const newEnemy = { pos: new Vector2(Math.floor(Math.random()*(GAME_WIDTH-enemyArt[0].length)), 1), moveThreshold: this.enemyBaseMoveThreshold + (isBossAdd ? -1 : Math.floor(Math.random()*2)) - Math.floor(state.difficulty*0.5) , projectiles:[], art: enemyArt, type: enemyType, activeLasers: [], aiState: hangMidScreen ? 'descending_to_hang' : 'descending', hangTargetY: hangMidScreen ? Math.floor(GAME_HEIGHT / 3 + Math.random() * (GAME_HEIGHT / 3.5)) : -1, hangDuration: hangMidScreen ? (120 + Math.random() * 120) : 0, movementPattern: { type: 'straight_down', ticks: 0, originalX: 0 }, health: (enemyType.includes("heavy")? 45 : (enemyType.includes("scout")? 10 : 20)) + state.difficulty * 8 };
+                if (hangMidScreen && !isBossAdd && newEnemy.art) { newEnemy.movementPattern.type = Math.random() < 0.6 ? 'sine_horizontal' : 'pause_shoot'; newEnemy.movementPattern.amplitude = Math.floor(Math.random()*6) + 3; newEnemy.movementPattern.period = Math.floor(Math.random()*30) + 40; newEnemy.movementPattern.originalX = newEnemy.pos.x; } state.enemies.push(newEnemy);
+            }
+            updateEnemies() { const state = this.state; let applyGlobalSlowdown = false; if (state.tick % 750 === 0 && state.difficulty > 1.2 && !this.enemySlowdownActive) { this.enemySlowdownActive = true; this.enemySlowdownTicksLeft = 240; this.enemyOriginalMoveThresholds.clear(); } if (this.enemySlowdownActive) { this.enemySlowdownTicksLeft--; if (this.enemySlowdownTicksLeft <= 0) { this.enemySlowdownActive = false; state.enemies.forEach(enemy => { if (this.enemyOriginalMoveThresholds.has(enemy)) enemy.moveThreshold = this.enemyOriginalMoveThresholds.get(enemy); }); } else { applyGlobalSlowdown = true; }}
+                for (let i = state.enemies.length - 1; i >= 0; i--) { const enemy = state.enemies[i]; if(!enemy || !enemy.art || !enemy.pos || !enemy.art[0]) {state.enemies.splice(i,1); continue;} let currentMoveThreshold = enemy.moveThreshold; if (applyGlobalSlowdown) { if (!this.enemyOriginalMoveThresholds.has(enemy)) this.enemyOriginalMoveThresholds.set(enemy, enemy.moveThreshold); currentMoveThreshold = Math.max(1, enemy.moveThreshold * 2.5); } else if (!this.enemySlowdownActive && this.enemyOriginalMoveThresholds.has(enemy)){ currentMoveThreshold = enemy.moveThreshold = this.enemyOriginalMoveThresholds.get(enemy); this.enemyOriginalMoveThresholds.delete(enemy); }
+                if (state.tick % Math.max(1, Math.floor(currentMoveThreshold)) === 0) { if (enemy.aiState === 'descending_to_hang') { enemy.pos.y+=0.5; if (enemy.pos.y >= enemy.hangTargetY) enemy.aiState = 'hanging'; } else if (enemy.aiState === 'hanging') { enemy.hangDuration--; if (enemy.movementPattern.type === 'sine_horizontal') { enemy.movementPattern.ticks++; const dx = Math.sin((enemy.movementPattern.ticks / enemy.movementPattern.period) * Math.PI * 2) * enemy.movementPattern.amplitude; enemy.pos.x = Math.max(0, Math.min(GAME_WIDTH - enemy.art[0].length, Math.floor(enemy.movementPattern.originalX - enemy.movementPattern.amplitude + dx))); } else if (enemy.movementPattern.type === 'pause_shoot' && state.tick % 60 < 10) { /* Shoot during pause */} if (enemy.type === 'laserEnemy_heavy' && enemy.aiState === 'hanging') { if (!enemy.movementPattern.targetPos || state.tick % 90 === 0) { enemy.movementPattern.targetPos = new Vector2( Math.random() * (GAME_WIDTH - enemy.art[0].length), enemy.pos.y ); } if (enemy.pos.x < enemy.movementPattern.targetPos.x) enemy.pos.x += 0.3; else if (enemy.pos.x > enemy.movementPattern.targetPos.x) enemy.pos.x -= 0.3;} if (enemy.hangDuration <= 0) enemy.aiState = 'descending_from_hang'; } else { enemy.pos.y+=0.75; } } 
+                if (enemy.pos.y >= GAME_HEIGHT) { state.enemies.splice(i, 1); continue; } 
+                if (enemy.type && enemy.type.includes('laser') && enemy.activeLasers) { enemy.activeLasers = enemy.activeLasers.filter(laser => { laser.duration--; return laser.duration > 0; }); if (enemy.activeLasers.length > 0 && enemy.activeLasers[0]) enemy.activeLasers[0].active = enemy.activeLasers[0].duration > 0; if (Math.random() < (0.008 + (enemy.type==='laserEnemy_heavy'?0.006: (enemy.type==='laserEnemy_scout'?0.003:0) )) * state.difficulty && enemy.activeLasers.length === 0 && enemy.pos.y > 0) { enemy.activeLasers.push({ startPos: new Vector2(enemy.pos.x + Math.floor(enemy.art[0].length / 2), enemy.pos.y + enemy.art.length), active: true, duration: this.enemyLaserDuration, char: '│', width: 1, damage: (enemy.type==='laserEnemy_heavy'?1.0:0.5), colorClass: (enemy.type==='laserEnemy_heavy'?'laser-red':'laser-white') }); } } 
+                else { if (enemy.projectiles && Math.random() < (0.012 + 0.006 * state.difficulty) && enemy.projectiles.length < 3 && enemy.pos.y > 0) { enemy.projectiles.push({ pos: new Vector2(enemy.pos.x+Math.floor(enemy.art[0].length/2),enemy.pos.y+enemy.art.length), art:ASCII_ART.bullet, type:'enemy'}); } } 
+                } this.updateSerpents(); 
+            }
+            spawnBoss(type = 'regular') {
+                const state = this.state;
+                // Prevent re-spawning the *same type* of boss if one is already active.
+                // Allows transitioning from mega to titan.
+                if (state.boss && state.boss.type === type) {
+                    console.log(`${type.toUpperCase()} boss already exists or is being spawned.`);
+                    return;
+                }
+
+                let bossArt, bossHealth, bossSpeed, bossTargetY, cannonPos, attackPattern, bannerText;
+
+                if (type === 'titan') {
+                    bossArt = ASCII_ART.titanMegaBoss;
+                    bossHealth = Math.floor(75000 * state.difficulty); // Significantly more health
+                    bossSpeed = 0.15; // Slower, more imposing entry
+                    bossTargetY = 2;  // Hangs very high on the screen
+                    // Define specific cannon positions for the Titan based on its art
+                    cannonPos = [
+                        { x: 10, y: 5 }, { x: bossArt[0].length - 11, y: 5 }, // Mid-level wide cannons
+                        // Adjusted lower-mid cannons to be slightly more outward for wider art
+                        { x: 15, y: 9 }, { x: bossArt[0].length - 16, y: 9 },
+                        // Central cannons for focused attacks or special weapons
+                        { x: Math.floor(bossArt[0].length / 2) - 2, y: bossArt.length - 3 }, // Lower center left
+                        { x: Math.floor(bossArt[0].length / 2) + 2, y: bossArt.length - 3 }, // Lower center right
+                        { x: Math.floor(bossArt[0].length / 2) - 5, y: 2 }, { x: Math.floor(bossArt[0].length / 2) + 5, y: 2 } // Top center spread cannons
+                    ];
+                    attackPattern = 'titan_barrage'; // Initial attack pattern for Titan
+                    bannerText = "TITAN OVERLORD DETECTED!";
+                } else if (type === 'mega') {
+                    bossArt = ASCII_ART.megaBoss;
+                    bossHealth = Math.floor(1700 * state.difficulty); // Reduced Mega Boss health for testing
+                    bossSpeed = 0.2;
+                    bossTargetY = 3;
+                    cannonPos = [ { x: 3, y: 1 }, { x: (bossArt && bossArt[0] ? bossArt[0].length : 30) - 4, y: 1 }, { x: 3, y: 4 }, { x: (bossArt && bossArt[0] ? bossArt[0].length : 30) - 4, y: 4 } ];
+                    attackPattern = 'missiles';
+                    bannerText = "MEGA BOSS APPROACHING!";
+                } else { // Regular boss
+                    bossArt = ASCII_ART.boss;
+                    bossHealth = Math.floor(15000 * state.difficulty);
+                    bossSpeed = 0.3;
+                    bossTargetY = 5;
+                    // Regular boss might have a single central cannon or simpler setup
+                    cannonPos = [{ x: Math.floor((bossArt[0].length || 1) / 2), y: (bossArt.length || 1) }];
+                    attackPattern = 'bullets';
+                    bannerText = "BOSS APPROACHING!";
+                }
+
+                if (!bossArt || !bossArt[0]) { console.error("Boss art not found for type:", type); return; }
+
+                state.boss = {
+                    pos: new Vector2(Math.floor((GAME_WIDTH - bossArt[0].length) / 2), -bossArt.length), // Start off-screen above
+                    art: bossArt, health: bossHealth, projectiles: [], activeLasers: [],
+                    speed: bossSpeed, type: type, direction: 1, aiState: 'entering', targetY: bossTargetY,
+                    circularMoveAngle: 0, // For Titan's circular movement
+                    circularMoveRadiusX: Math.floor(GAME_WIDTH / 4), // Radius for circular X
+                    circularMoveRadiusY: Math.floor(GAME_HEIGHT / 10), // Radius for circular Y
+                    circularMoveCenterX: Math.floor(GAME_WIDTH / 2), // Center X for circular path
+                    circularMoveCenterY: Math.floor(GAME_HEIGHT / 4), // Center Y for circular path
+                    missileCooldown: 0, laserCooldown: 0, currentAttackPattern: attackPattern, attackTimer: 0, 
+                    cannonPositions: cannonPos
+                };
+
+                // Add banner, avoid duplicates if one is already showing for this boss type
+                if (!state.activeBanners.find(b => b.text && b.text.includes(type.toUpperCase()))) {
+                    state.addBanner(ASCII_ART.banner_bossIncoming, bannerText, "talking");
+                }
+            }
+            spawnSerpent() { const initialLength = 5 + Math.floor(this.state.difficulty * 2); const startX = Math.floor(Math.random() * (GAME_WIDTH - (ASCII_ART.serpentHead && ASCII_ART.serpentHead[0] ? ASCII_ART.serpentHead[0].length : 5))); const startY = -(ASCII_ART.serpentHead ? ASCII_ART.serpentHead.length : 3); const serpent = { segments: [], targetPos: new Vector2(startX, Math.floor(GAME_HEIGHT / 4)), moveTick: 0, segmentHealthBase: 10 + this.state.difficulty * 2 , initialLength: initialLength, regrowTick:0, shootTick:0 }; for (let i = 0; i < initialLength; i++) { serpent.segments.push({ pos: new Vector2(startX, startY - i * ((ASCII_ART.serpentBody? ASCII_ART.serpentBody.length:2)-1)), lastPos: new Vector2(startX, startY - i * ((ASCII_ART.serpentBody?ASCII_ART.serpentBody.length:2)-1)), health: serpent.segmentHealthBase + Math.floor(this.state.difficulty * 3) }); } this.state.serpents.push(serpent); }
+            updateSerpents() { this.state.serpents.forEach((serpent, sIdx) => { if (!serpent.segments || serpent.segments.length === 0) { this.state.serpents.splice(sIdx, 1); return; } serpent.moveTick = (serpent.moveTick || 0) + 1; if (serpent.moveTick >= this.serpentMoveInterval) { serpent.moveTick = 0; const head = serpent.segments[0]; if (Math.random() < 0.1 || (head.pos && serpent.targetPos && head.pos.equals(serpent.targetPos))) { let newTargetX = this.state.player.pos.x + Math.floor(this.state.player.currentArt[0].length/2); let newTargetY = this.state.player.pos.y - 5; if (Math.random() < 0.4) { newTargetX = Math.floor(Math.random() * (GAME_WIDTH - ASCII_ART.serpentHead[0].length)); newTargetY = Math.floor(GAME_HEIGHT / 4 + Math.random() * (GAME_HEIGHT / 2)); } serpent.targetPos = new Vector2(newTargetX, newTargetY); } if(head.pos && serpent.targetPos){head.lastPos = new Vector2(head.pos.x, head.pos.y); if (head.pos.x < serpent.targetPos.x) head.pos.x+=1.2; else if (head.pos.x > serpent.targetPos.x) head.pos.x-=1.2; if (head.pos.y < serpent.targetPos.y) head.pos.y+=1.2; else if (head.pos.y > serpent.targetPos.y) head.pos.y-=1.2; head.pos.x = Math.floor(head.pos.x); head.pos.y = Math.floor(head.pos.y); head.pos.x = Math.max(0, Math.min(GAME_WIDTH - ASCII_ART.serpentHead[0].length, head.pos.x)); head.pos.y = Math.max(0, Math.min(GAME_HEIGHT - ASCII_ART.serpentHead.length, head.pos.y)); for (let i = 1; i < serpent.segments.length; i++) { const currentSegment = serpent.segments[i]; const prevSegment = serpent.segments[i - 1]; if (currentSegment && prevSegment && prevSegment.lastPos) { currentSegment.lastPos = new Vector2(currentSegment.pos.x, currentSegment.pos.y); currentSegment.pos = new Vector2(prevSegment.lastPos.x, prevSegment.lastPos.y); }}}}
+                serpent.initialLength = serpent.initialLength || serpent.segments.length; if (serpent.segments.length < serpent.initialLength && (serpent.regrowTick || 0) >= this.serpentRegrowCooldown) { if (serpent.segments.length > 0) {const tail = serpent.segments[serpent.segments.length - 1]; if (tail && tail.lastPos) serpent.segments.push({ pos: new Vector2(tail.lastPos.x, tail.lastPos.y), lastPos: new Vector2(tail.lastPos.x, tail.lastPos.y), health: (serpent.segmentHealthBase || 10) + Math.floor(this.state.difficulty * 2) });} serpent.regrowTick = 0; } else { serpent.regrowTick = (serpent.regrowTick || 0) + 1; } serpent.shootTick = (serpent.shootTick || 0) +1; if (serpent.shootTick >= this.serpentShootCooldown && serpent.segments.length > 0 && serpent.segments[0].pos) { this.state.enemies.push({ pos: new Vector2(serpent.segments[0].pos.x + Math.floor(ASCII_ART.serpentHead[0].length/2), serpent.segments[0].pos.y + ASCII_ART.serpentHead.length), art: ASCII_ART.bullet, type: 'enemy_serpent_shot', projectiles:[], moveThreshold: 1}); serpent.shootTick = 0; } }); }
+            updateBoss() {
+                const state = this.state;
+                if (!state.boss || !state.boss.art || !state.boss.pos || !state.boss.art[0]) return;
+                const boss = state.boss;
+
+                if (boss.aiState === 'entering') {
+                    boss.pos.y += boss.speed;
+                    if (boss.pos.y >= boss.targetY) {
+                        boss.pos.y = boss.targetY; // Snap to target Y
+                        boss.aiState = 'fighting';
+                    }
+                    return; // Don't do other AI until fully entered
+                }
+
+                // Movement Logic
+                if (boss.type === 'titan') {
+                    // Circular/Elliptical movement for Titan
+                    boss.circularMoveAngle += 0.015; // Speed of circular motion
+                    const targetX = boss.circularMoveCenterX + Math.cos(boss.circularMoveAngle) * boss.circularMoveRadiusX - Math.floor(boss.art[0].length / 2);
+                    const targetY = boss.circularMoveCenterY + Math.sin(boss.circularMoveAngle) * boss.circularMoveRadiusY - Math.floor(boss.art.length / 2);
+                    
+                    // Smoothly move towards the target circular path position
+                    const moveFactor = 0.05; // How quickly it snaps to the path
+                    boss.pos.x += (targetX - boss.pos.x) * moveFactor;
+                    boss.pos.y += (targetY - boss.pos.y) * moveFactor;
+
+                    // Ensure boss stays within reasonable bounds (optional, circular path should handle it)
+                    boss.pos.x = Math.max(0, Math.min(GAME_WIDTH - boss.art[0].length, boss.pos.x));
+                    boss.pos.y = Math.max(0, Math.min(GAME_HEIGHT - boss.art.length, boss.pos.y));
+
+                } else { // Horizontal Movement for Mega and Regular Boss
+                    const bossMoveInterval = Math.max(1, Math.floor(5 / (boss.speed * 2))); 
+                    if (state.tick % bossMoveInterval === 0) {
+                        boss.pos.x += boss.direction * 0.5; 
+                    }
+                    if (boss.pos.x <= 0 || boss.pos.x + boss.art[0].length >= GAME_WIDTH) {
+                        boss.pos.x = Math.max(0, Math.min(GAME_WIDTH - boss.art[0].length, boss.pos.x)); 
+                        boss.direction *= -1; 
+                    }
+                }
+
+                boss.attackTimer = (boss.attackTimer || 0) + 1;
+
+                // --- Titan Boss Specific Logic ---
+                if (boss.type === 'titan') {
+                    boss.missileCooldown = Math.max(0, boss.missileCooldown - 1);
+                    boss.laserCooldown = Math.max(0, boss.laserCooldown - 1);
+
+                    // Titan: Switch attack patterns (e.g., barrage, laser sweep)
+                    if (boss.attackTimer > 200) { // Longer interval for Titan pattern switch
+                        boss.currentAttackPattern = Math.random() < 0.7 ? 'titan_barrage' : 'titan_laser_sweep';
+                        boss.attackTimer = 0;
+                    }
+
+                    if (boss.currentAttackPattern === 'titan_barrage' && boss.missileCooldown === 0) {
+                        (boss.cannonPositions || []).forEach(cannon => {
+                            const missileArt = ASCII_ART.missile; // Titan might use single, more powerful missiles
+                            const spawnX = boss.pos.x + cannon.x - Math.floor(missileArt[0].length / 2);
+                            const spawnY = boss.pos.y + cannon.y + 1; // Spawn just below the cannon
+                            if (!boss.projectiles) boss.projectiles = [];
+                            boss.projectiles.push({ pos: new Vector2(spawnX, spawnY), art: missileArt, type: 'boss_missile', speedY: 0.8 + Math.random() * 0.4, homingStrength: 0.02 + state.difficulty * 0.005 });
+                        });
+                        boss.missileCooldown = Math.max(15, 50 - state.difficulty * 10); // Faster barrage
+                    } else if (boss.currentAttackPattern === 'titan_laser_sweep' && boss.laserCooldown === 0 && (!boss.activeLasers || boss.activeLasers.length === 0)) {
+                        const laserX = boss.pos.x + Math.floor(boss.art[0].length / 2); // Central laser
+                        if (!boss.activeLasers) boss.activeLasers = [];
+                        boss.activeLasers.push({ startPos: new Vector2(laserX, boss.pos.y + boss.art.length - 1), active: true, duration: this.megaBossLaserDuration + 30, char: '█', width: 6, damage: 3, colorClass: 'laser-red', sweepSpeed: 0.20 * (Math.random() < 0.5 ? 1 : -1), sweepMaxOffset: 25 });
+                        boss.laserCooldown = Math.max(60, 150 - state.difficulty * 25);
+                    }
+
+                // --- Mega Boss Specific Logic ---
+                } else if (boss.type === 'mega') {
+                    boss.missileCooldown = Math.max(0, boss.missileCooldown - 1);
+                    boss.laserCooldown = Math.max(0, boss.laserCooldown - 1);
+                    if (boss.attackTimer > 180) { // Mega boss pattern switch
+                        boss.currentAttackPattern = Math.random() < 0.6 ? 'missiles' : 'laser_sweep';
+                        boss.attackTimer = 0;
+                    }
+                    if (boss.currentAttackPattern === 'missiles' && boss.missileCooldown === 0) {
+                        (boss.cannonPositions || []).forEach(cannon => {
+                            const missileType = Math.random() < 0.4 ? ASCII_ART.multiMissile : ASCII_ART.missile;
+                            const numMissilesInArt = missileType === ASCII_ART.multiMissile ? 3 : 1;
+                            // Adjust spawnX for multiMissile art to center the art piece over the cannon point
+                            const spawnX = boss.pos.x + cannon.x - Math.floor(((missileType && missileType[0] ? missileType[0].length : 3) / numMissilesInArt / 2) * (numMissilesInArt-1));
+                            if (!boss.projectiles) boss.projectiles = [];
+                            boss.projectiles.push({ pos: new Vector2(spawnX, boss.pos.y + cannon.y + 1), art: missileType, type: 'boss_missile', speedY: 0.7 + Math.random() * 0.5, homingStrength: 0.03 + state.difficulty * 0.01 });
+                        });
+                        boss.missileCooldown = Math.max(20, 70 + Math.floor(Math.random() * 40) - state.difficulty * 15);
+                    } else if (boss.currentAttackPattern === 'laser_sweep' && boss.laserCooldown === 0 && (!boss.activeLasers || boss.activeLasers.length === 0)) {
+                        const laserX = boss.pos.x + Math.floor(boss.art[0].length / 2);
+                        if (!boss.activeLasers) boss.activeLasers = [];
+                        boss.activeLasers.push({ startPos: new Vector2(laserX, boss.pos.y + boss.art.length - 1), active: true, duration: this.megaBossLaserDuration + 15, char: '█', width: 4, damage: 2, colorClass: 'laser-green', sweepSpeed: 0.25 * (Math.random() < 0.5 ? 1 : -1), sweepMaxOffset: 20 });
+                        boss.laserCooldown = Math.max(50, 130 - state.difficulty * 20);
+                    }
+                // --- Regular Boss Specific Logic ---
+                } else { // Regular Boss
+                    if (boss.attackTimer > 120 - state.difficulty * 10) {
+                        const spread = Math.floor(state.difficulty);
+                        // Use cannonPositions for regular boss too, even if it's just one central point
+                        (boss.cannonPositions || [{ x: Math.floor(boss.art[0].length / 2), y: boss.art.length }]).forEach(cannon => {
+                            for (let i = -spread; i <= spread; i++) {
+                                if (!boss.projectiles) boss.projectiles = [];
+                                boss.projectiles.push({ pos: new Vector2(boss.pos.x + cannon.x + i * 3, boss.pos.y + cannon.y), art: ASCII_ART.bullet, type: 'boss' });
+                            }
+                        });
+                        boss.attackTimer = 0;
+                    }
+                }
+
+                // Common logic for updating active lasers (sweep movement, duration)
+                if (boss.activeLasers) {
+                    boss.activeLasers = boss.activeLasers.filter(laser => {
+                        laser.duration--;
+                        if (laser.sweepSpeed) { // Apply sweep if the laser has this property
+                            laser.startPos.x += laser.sweepSpeed;
+                            const centerX = boss.pos.x + Math.floor(boss.art[0].length / 2);
+                            if (Math.abs(laser.startPos.x - centerX) > laser.sweepMaxOffset) {
+                                laser.sweepSpeed *= -1; // Reverse direction
+                                // Clamp to max offset to prevent overshooting
+                                laser.startPos.x = centerX + Math.sign(laser.startPos.x - centerX) * laser.sweepMaxOffset;
+                            }
+                        }
+                        return laser.duration > 0;
+                    });
+                    // Ensure the 'active' flag is correctly set on the first laser if any remain
+                    if (boss.activeLasers.length > 0 && boss.activeLasers[0]) {
+                        boss.activeLasers[0].active = boss.activeLasers[0].duration > 0;
+                    }
+                }
+            }
+            updateProjectiles() { const state = this.state; const player = state.player; if(!player || !player.projectiles) return; player.projectiles = player.projectiles.filter(proj => { if(!proj || !proj.pos || !proj.art) return false; proj.pos.y -= 1.5; if (proj.pos.y < 0) return false;
+                for (let i = state.enemies.length - 1; i >= 0; i--) { const enemy = state.enemies[i]; if(!enemy || !enemy.art || !enemy.pos) continue; const art = enemy.art; if (proj.pos.x >= enemy.pos.x && proj.pos.x < enemy.pos.x + art[0].length && proj.pos.y >= enemy.pos.y && proj.pos.y < enemy.pos.y + art.length) { enemy.health = (enemy.health || 0) - (proj.damage || player.projectileDamage); if (enemy.health <= 0) {state.enemies.splice(i, 1); state.score += (enemy.type === 'laserEnemy' ? 150 : 100);} else {this.createExplosion(new Vector2(proj.pos.x, proj.pos.y));} return false; } }
+                if(state.serpents) for (let sIdx = state.serpents.length - 1; sIdx >= 0; sIdx--) { const serpent = state.serpents[sIdx]; if(!serpent.segments) continue; for (let segIdx = serpent.segments.length - 1; segIdx >= 0; segIdx--) { const segment = serpent.segments[segIdx]; if(!segment || !segment.pos) continue; const art = segIdx === 0 ? ASCII_ART.serpentHead : ASCII_ART.serpentBody; if (proj.pos.x >= segment.pos.x && proj.pos.x < segment.pos.x + art[0].length && proj.pos.y >= segment.pos.y && proj.pos.y < segment.pos.y + art.length) { segment.health -= (proj.damage || player.projectileDamage); this.createExplosion(new Vector2(proj.pos.x, proj.pos.y)); if (segment.health <= 0) { this.createExplosion(new Vector2(segment.pos.x + art[0].length/2, segment.pos.y + art.length/2)); serpent.segments.splice(segIdx, 1); state.score += 75; if (serpent.segments.length === 0) { state.serpents.splice(sIdx, 1); state.score += 750;}} return false;}}}
+                if (state.boss && state.boss.art && state.boss.pos && state.boss.art[0]) {
+                    const art = state.boss.art;
+                    if (proj.pos.x >= state.boss.pos.x && proj.pos.x < state.boss.pos.x + art[0].length &&
+                        proj.pos.y >= state.boss.pos.y && proj.pos.y < state.boss.pos.y + art.length) {
+                        state.boss.health -= (proj.damage || player.projectileDamage);
+                        state.score += Math.floor((proj.damage || player.projectileDamage) * 2.5);
+                        this.createExplosion(new Vector2(proj.pos.x, proj.pos.y));
+                        if (state.boss.health <= 0) {
+                            state.score += (state.boss.type === 'titan' ? 15000 : (state.boss.type === 'mega' ? 7500 : 1500));
+                            if (state.boss.type === 'mega') {
+                                // Transition: Mega Boss defeated, spawn Titan
+                                this.spawnBoss('titan'); // This will replace state.boss
+                            } else {
+                                // Titan or Regular Boss defeated
+                                state.boss = null;
+                                // Potentially trigger game win sequence if Titan is defeated
+                                if (type === 'titan') console.log("TITAN DEFEATED! GAME OVER (WIN)"); // Placeholder
+                            }
+                        }
+                        return false; // Projectile is consumed
+                    }
+                }
+                return true;
+            });
+
+                // Update Ally Projectiles (and check collision with enemies)
+                if (this.state.allies) {
+                    this.state.allies.forEach(ally => {
+                        if (ally.projectiles) {
+                            ally.projectiles = ally.projectiles.filter(proj => {
+                                if (!proj || !proj.pos || !proj.art) return false;
+                                proj.pos.y += proj.speedY; // Ally bullets move based on their speedY
+
+                                if (proj.pos.y < 0) return false; // Off-screen top
+                                // Check collision with enemies
+                                for (let i = this.state.enemies.length - 1; i >= 0; i--) {
+                                    const enemy = this.state.enemies[i];
+                                    if(!enemy || !enemy.art || !enemy.pos || !enemy.art[0]) continue;
+                                    const enemyArt = enemy.art;
+                                    if (proj.pos.x >= enemy.pos.x && proj.pos.x < enemy.pos.x + enemyArt[0].length &&
+                                        proj.pos.y >= enemy.pos.y && proj.pos.y < enemy.pos.y + enemyArt.length) {
+                                        enemy.health = (enemy.health || 0) - (proj.damage || 8);
+                                        if (enemy.health <= 0) {
+                                            state.enemies.splice(i, 1);
+                                            this.createExplosion(new Vector2(enemy.pos.x + enemyArt[0].length/2, enemy.pos.y + enemyArt.length/2));
+                                        } else { this.createExplosion(new Vector2(proj.pos.x, proj.pos.y)); }
+                                        return false; // Projectile consumed
+                                    }
+                                }
+                                return true; // Projectile not consumed
+                            });
+                        }
+                    });
+                }
+
+                const updateNonPlayerProjectiles = (projectileList) => { if(!projectileList) return []; return projectileList.filter(proj => { if(!proj || !proj.pos || !proj.art) return false; if (proj.type === 'boss_missile') { proj.pos.y += proj.speedY; if (player && proj.pos.x < player.pos.x + player.currentArt[0].length/2 && proj.pos.x < GAME_WIDTH - proj.art[0].length) proj.pos.x += proj.homingStrength || 0.15; else if (player && proj.pos.x > player.pos.x + player.currentArt[0].length/2 && proj.pos.x > 0) proj.pos.x -= proj.homingStrength || 0.15; } else { proj.pos.y += (proj.type === 'boss_special' || proj.type === 'enemy_serpent_shot' ? 1.3 : 1.1); } if (proj.pos.y >= GAME_HEIGHT || proj.pos.y < -proj.art.length) return false; if(player && player.invincibilityTicks === 0) {const pArt = player.currentArt; if (proj.pos.x + proj.art[0].length > player.pos.x && proj.pos.x < player.pos.x+pArt[0].length && proj.pos.y+proj.art.length > player.pos.y && proj.pos.y < player.pos.y+pArt.length) { player.health -= (proj.type==='boss_missile'?15:(proj.type==='boss_special'?10:(proj.type === 'enemy_serpent_shot'?8:7))); player.invincibilityTicks = this.playerInvincibilityDuration; this.createExplosion(new Vector2(proj.pos.x + proj.art[0].length/2 ,proj.pos.y + proj.art.length/2)); if(player.health<=0){player.health=0;state.gameOver=true;} return false; }} return true; }); };
+                if(state.enemies) state.enemies.forEach(enemy => { if(enemy && enemy.projectiles) enemy.projectiles = updateNonPlayerProjectiles(enemy.projectiles); });
+                if (state.boss && state.boss.projectiles) { state.boss.projectiles = updateNonPlayerProjectiles(state.boss.projectiles); }
+            }
+            checkLaserCollisions() { const state = this.state; const player = state.player; if(!player || !player.activeLasers) return; player.activeLasers.forEach(laser => { if (laser.active) { if(state.enemies) for (let i = state.enemies.length - 1; i >= 0; i--) { const enemy = state.enemies[i]; if(!enemy || !enemy.art || !enemy.pos) continue; const enemyArt = enemy.art; const laserStartX = Math.floor(laser.currentDrawX || laser.startPos.x); const laserEndX = laserStartX + laser.width -1; if (enemy.pos.x + enemyArt[0].length > laserStartX && enemy.pos.x < laserEndX + 1 && enemy.pos.y + enemyArt.length > 0 && enemy.pos.y < (laser.currentDrawY || laser.startPos.y) ) { enemy.health = (enemy.health || 0) - laser.damage; if (enemy.health <=0) {state.enemies.splice(i, 1); state.score += Math.floor((enemy.type === 'laserEnemy' ? 200 : 150) * 1.5);} else {if(state.tick % 5 === 0) this.createExplosion(new Vector2(laserStartX + Math.floor(laser.width/2), enemy.pos.y + Math.random() * enemyArt.length));} } }
+                if(state.serpents) for (let sIdx = state.serpents.length - 1; sIdx >= 0; sIdx--) { const serpent = state.serpents[sIdx]; if(!serpent.segments) continue; for (let segIdx = serpent.segments.length - 1; segIdx >= 0; segIdx--) { const segment = serpent.segments[segIdx]; if(!segment || !segment.pos) continue; const art = segIdx === 0 ? ASCII_ART.serpentHead : ASCII_ART.serpentBody; const laserStartX = Math.floor(laser.currentDrawX || laser.startPos.x); const laserEndX = laserStartX + laser.width -1; if (segment.pos.x + art[0].length > laserStartX && segment.pos.x < laserEndX + 1 && segment.pos.y + art.length > 0 && segment.pos.y < (laser.currentDrawY || laser.startPos.y)) { segment.health -= laser.damage * 2.5; state.score += Math.floor(laser.damage * 4.5); if (state.tick % 3 === 0) this.createExplosion(new Vector2(laserStartX + Math.floor(laser.width/2), segment.pos.y + Math.random() * art.length)); if (segment.health <= 0) { this.createExplosion(new Vector2(segment.pos.x + art[0].length/2, segment.pos.y + art.length/2)); serpent.segments.splice(segIdx,1); state.score += 75; if(serpent.segments.length === 0) { state.serpents.splice(sIdx, 1); state.score += 750;}}}}}
+                if (state.boss && state.boss.art && state.boss.pos && state.boss.art[0]) {
+                    const bossArt = state.boss.art;
+                    const laserStartX = Math.floor(laser.currentDrawX || laser.startPos.x);
+                    const laserEndX = laserStartX + laser.width - 1;
+                    if (state.boss.pos.x + bossArt[0].length > laserStartX && state.boss.pos.x < laserEndX + 1 &&
+                        state.boss.pos.y + bossArt.length > 0 && state.boss.pos.y < (laser.currentDrawY || laser.startPos.y)) {
+                        state.boss.health -= laser.damage * 1.5;
+                        state.score += Math.floor(laser.damage * 3);
+                        if (state.tick % 5 === 0) this.createExplosion(new Vector2(laserStartX + Math.floor(laser.width / 2), state.boss.pos.y + Math.random() * bossArt.length));
+                        if (state.boss.health <= 0) {
+                            state.score += (state.boss.type === 'titan' ? 15000 : (state.boss.type === 'mega' ? 7500 : 1500));
+                            if (state.boss.type === 'mega') {
+                                this.spawnBoss('titan'); // Spawn Titan after Mega Boss
+                            } else {
+                                state.boss = null; // Titan or regular boss defeated
+                                if (type === 'titan') console.log("TITAN DEFEATED! GAME OVER (WIN)");
+                            }
+                        }
+                    }
+                }}});
+                if(state.enemies) state.enemies.forEach(enemy => { if (enemy.activeLasers) { enemy.activeLasers.forEach(laser => { if (laser.active && player.invincibilityTicks === 0 && !player.shieldActive) { const playerArt = player.currentArt; if (player.pos.x + playerArt[0].length > laser.startPos.x && player.pos.x < laser.startPos.x + (laser.width || 1) && player.pos.y < GAME_HEIGHT && player.pos.y + playerArt.length > laser.startPos.y) { player.health -= laser.damage * 0.5; player.invincibilityTicks = this.playerInvincibilityDuration; this.createExplosion(new Vector2(laser.startPos.x, player.pos.y + Math.floor(playerArt.length/2))); if (player.health <= 0) { player.health = 0; state.gameOver = true; } }} }); } });
+                if (state.boss && state.boss.activeLasers) { state.boss.activeLasers.forEach(laser => { if (laser.active && player.invincibilityTicks === 0 && !player.shieldActive) { const playerArt = player.currentArt; if (player.pos.x + playerArt[0].length > laser.startPos.x && player.pos.x < laser.startPos.x + (laser.width || 1) && player.pos.y < GAME_HEIGHT && player.pos.y + playerArt.length > laser.startPos.y ) { player.health -= laser.damage * 0.8; player.invincibilityTicks = this.playerInvincibilityDuration; this.createExplosion(new Vector2(laser.startPos.x + Math.floor((laser.width||1)/2), player.pos.y + Math.floor(playerArt.length/2))); if (player.health <= 0) { player.health = 0; state.gameOver = true; } } }});}
+            }
+            checkCollisions() { const state = this.state; const player = state.player; if(!player) return; const playerArt = player.currentArt; const pWidth = playerArt[0].length; const pHeight = playerArt.length;
+                if(state.powerUps) state.powerUps.forEach((pu, i) => { if(!pu || !pu.art || !pu.pos) return; const puArt = pu.art; if (player.pos.x<pu.pos.x+puArt[0].length&&player.pos.x+pWidth>pu.pos.x && player.pos.y<pu.pos.y+puArt.length&&player.pos.y+pHeight>pu.pos.y) { if (pu.type === 'size_increase' && player.augmentationLevel === 0) { player.augmentationLevel = 1; player.isLarge=true; player.currentArt=ASCII_ART.player_large; this.state.addBanner(["SHIP SYSTEMS ENHANCED!"], "LARGE SHIP", "talking");} else if (pu.type === 'augment_pickup' && player.augmentationLevel === 1) {player.augmentationLevel = 2; player.isAugmented = true; player.currentArt = ASCII_ART.player_augmented; this.state.addBanner(ASCII_ART.banner_shipAugmented, "SHIP SYSTEMS AUGMENTED!", "talking");} else if (pu.type === 'laser_charge') { player.laserCharges = Math.min(player.laserCharges + 3, 8); } else if (pu.type === 'shield_charge') { player.shieldCharges = Math.min(player.shieldCharges + 1, 3); } if(player.pos.x + player.currentArt[0].length > GAME_WIDTH) player.pos.x = GAME_WIDTH - player.currentArt[0].length; if(player.pos.y + player.currentArt.length > GAME_HEIGHT) player.pos.y = GAME_HEIGHT - player.currentArt.length; state.powerUps.splice(i,1); } });
+                if (player.shieldActive && ASCII_ART.hexStructure && ASCII_ART.hexStructure[player.shieldArtCurrentFrame]) { const shieldArtCurrent = ASCII_ART.hexStructure[player.shieldArtCurrentFrame]; if(shieldArtCurrent && shieldArtCurrent[0]) { const shieldDrawPosX = player.pos.x + Math.floor(pWidth / 2) - Math.floor(shieldArtCurrent[0].length / 2); const shieldDrawPosY = player.pos.y + Math.floor(pHeight / 2) - Math.floor(shieldArtCurrent.length / 2); const shieldWidth = shieldArtCurrent[0].length; const shieldHeight = shieldArtCurrent.length;
+                if(state.enemies) for (let i = state.enemies.length - 1; i >= 0; i--) { const enemy = state.enemies[i]; if(!enemy || !enemy.art || !enemy.pos) continue; const eArt = enemy.art; if (enemy.pos.x < shieldDrawPosX + shieldWidth && enemy.pos.x + eArt[0].length > shieldDrawPosX && enemy.pos.y < shieldDrawPosY + shieldHeight && enemy.pos.y + eArt.length > shieldDrawPosY) { enemy.health = (enemy.health || 0) - this.playerShieldDamage; if(enemy.health <= 0) {state.enemies.splice(i, 1); state.score += 50;} else {if(state.tick % 5 === 0) this.createExplosion(new Vector2(enemy.pos.x + eArt[0].length/2, enemy.pos.y + eArt.length/2));} }}
+                if(state.serpents) state.serpents.forEach(serpent => { if(serpent.segments) serpent.segments.forEach((segment, segIdx) => { if(!segment || !segment.pos) return; const art = segIdx === 0 ? ASCII_ART.serpentHead : ASCII_ART.serpentBody; if (segment.pos.x < shieldDrawPosX + shieldWidth && segment.pos.x + art[0].length > shieldDrawPosX && segment.pos.y < shieldDrawPosY + shieldHeight && segment.pos.y + art.length > shieldDrawPosY) { segment.health -= this.playerShieldDamage * 2; if (state.tick % 3 === 0) this.createExplosion(new Vector2(segment.pos.x + art[0].length/2, segment.pos.y + art.length/2)); if(segment.health <= 0) { /* Segments removed elsewhere if health drops */ } }}); });
+                if (state.boss && state.boss.art && state.boss.pos) { const bArt = state.boss.art; if (state.boss.pos.x < shieldDrawPosX + shieldWidth && state.boss.pos.x + bArt[0].length > shieldDrawPosX && state.boss.pos.y < shieldDrawPosY + shieldHeight && state.boss.pos.y + bArt.length > shieldDrawPosY) { state.boss.health -= this.playerShieldDamage; if (state.tick % 10 === 0) this.createExplosion(new Vector2(state.boss.pos.x + Math.random()*bArt[0].length, state.boss.pos.y + Math.random()*bArt.length)); if(state.boss.health <= 0) {state.score+=(state.boss.type==='mega'?7500:1500);state.boss=null;} }}
+                }} else { if (player.invincibilityTicks === 0) {
+                    if(state.enemies) for (let i = state.enemies.length - 1; i >= 0; i--) { const enemy = state.enemies[i]; if(!enemy || !enemy.art || !enemy.pos) continue; const eArt = enemy.art; if (player.pos.x<enemy.pos.x+eArt[0].length&&player.pos.x+pWidth>enemy.pos.x && player.pos.y<enemy.pos.y+eArt.length&&player.pos.y+pHeight>enemy.pos.y) { player.health-=10; player.invincibilityTicks = this.playerInvincibilityDuration; this.createExplosion(new Vector2(enemy.pos.x+eArt[0].length/2,enemy.pos.y+eArt.length/2));state.enemies.splice(i,1); if(player.health<=0){player.health=0;state.gameOver=true;return;} } }
+                    if(state.serpents) state.serpents.forEach(serpent => { if(serpent.segments) serpent.segments.forEach(segment => { if(!segment || !segment.pos) return; const art = serpent.segments.indexOf(segment) === 0 ? ASCII_ART.serpentHead : ASCII_ART.serpentBody; if (player.pos.x < segment.pos.x + art[0].length && player.pos.x + pWidth > segment.pos.x && player.pos.y < segment.pos.y + art.length && player.pos.y + pHeight > segment.pos.y) { player.health -= 15; player.invincibilityTicks = this.playerInvincibilityDuration; this.createExplosion(new Vector2(player.pos.x + pWidth/2, player.pos.y + pHeight/2)); segment.health = 0; /* Instant kill segment on collision */ } }); if(serpent.segments) serpent.segments = serpent.segments.filter(seg => seg.health > 0); if (serpent.segments && serpent.segments.length === 0) state.serpents = state.serpents.filter(s => s !== serpent); if(player.health<=0){player.health=0;state.gameOver=true;return;} });
+                    if (state.boss && state.boss.art && state.boss.pos) { const boss = state.boss; const bArt = boss.art; if (player.pos.x<boss.pos.x+bArt[0].length&&player.pos.x+pWidth>boss.pos.x && player.pos.y<boss.pos.y+bArt.length&&player.pos.y+pHeight>boss.pos.y) { player.health -= 20; player.invincibilityTicks = this.playerInvincibilityDuration;this.createExplosion(new Vector2(player.pos.x+pWidth/2,player.pos.y+pHeight/2)); if(player.health<=0){player.health=0;state.gameOver=true;}}}
+                }}
+                this.checkLaserCollisions();
+            }
+            updateBanners() { 
+                const state = this.state; 
+                if(state.activeBanners) {
+                    for (let i = state.activeBanners.length - 1; i >= 0; i--) { // Iterate backwards for safe splicing
+                        const banner = state.activeBanners[i];
+                        if (!banner) continue;
+                        if (banner.type === "talking") { 
+                            if (banner.isAnimating && state.tick % Math.floor(1/(banner.speed || 0.2)) === 0) { // Use banner.speed for talking animation
+                                if (banner.art && banner.art[0] && banner.currentCharIndex < banner.art[0].length) { 
+                                    banner.currentDisplay = [banner.art[0].substring(0, banner.currentCharIndex + 1)]; 
+                                    banner.currentCharIndex++; 
+                                } else { banner.isAnimating = false; }
+                            }
+                        } else { banner.pos.x -= banner.speed; } 
+                        banner.duration--; 
+                        if (banner.duration <= 0) { state.activeBanners.splice(i, 1); } 
+                    }
+                }
+            }
+            gameLoop() { 
+                // console.log("GameLoop entered. Tick:", this.state ? this.state.tick : "N/A"); // For debugging startup
+                try {
+                    const state = this.state; 
+                    if (!state) { console.error("FATAL: GameState is null in gameLoop!"); return; }
+
+                    if (!state.gameOver) { 
+                        state.tick++; 
+                        this.updatePlayer(); 
+                        this.spawnPowerUp(); 
+                        this.updatePowerUps(); 
+                        this.updateAllies(); 
+                        this.spawnEnemies(); 
+                        this.updateEnemies(); 
+                        this.updateBoss(); 
+                        this.updateProjectiles(); 
+                        this.checkCollisions(); 
+                        this.updateBanners(); 
+                        state.updateCurrentTargetEnemy(); 
+                    } 
+
+                    if(this.renderer) {
+                        this.renderer.render(); 
+                    } else { 
+                        console.error("Renderer not available in gameLoop!"); 
+                        // If renderer is critical, you might want to stop the loop or handle this error
+                        if (this.state) this.state.gameOver = true; // Example: stop game if renderer is missing
+                    }
+
+                    if (!state.gameOver) { 
+                        const difficultyCap = 4.0; 
+                        let targetDifficulty = 0.5 + (state.tick / (this.gamePaceTargetTime / (difficultyCap - 0.5))); 
+                        targetDifficulty = Math.min(difficultyCap, targetDifficulty); 
+                        if(state.score > 0) targetDifficulty = Math.max(targetDifficulty, 0.5 + Math.floor(state.score / 1200) * 0.5); 
+                        if (targetDifficulty > state.difficulty) state.difficulty = Math.min(difficultyCap, targetDifficulty); 
+                        
+                        requestAnimationFrame(() => this.gameLoop()); 
+                    } else {
+                        // If game is over, render one last time (if not already done by renderer itself)
+                        // and then don't request another frame.
+                        if(this.renderer) this.renderer.render();
+                        console.log("Game Over. Loop terminated.");
+                    }
+                } catch (e) {
+                    console.error("CRITICAL ERROR IN gameLoop:", e);
+                    if (this.renderer && this.renderer.gameArea) {
+                        this.renderer.gameArea.innerHTML = `<pre style="color:red; font-size:10px;">CRITICAL ERROR IN GAMELOOP:\n${e.message}\n${e.stack.replace(/</g, "&lt;").replace(/>/g, "&gt;")}</pre>`;
+                    }
+                    // Stop the loop by not calling requestAnimationFrame
+                    if (this.state) this.state.gameOver = true; // Ensure game over state is set
+                }
+            }
+            
+            start() { 
+                console.log("GameLogic: start() method entered.");
+                if(this.state) {
+                    console.log("GameLogic: Calling fullReset(1) on gameState.");
+                    this.state.fullReset(1); 
+                    console.log("GameLogic: fullReset(1) on gameState completed.");
+                } else {
+                    console.error("FATAL: GameState is not available in gameLogic.start()");
+                    document.getElementById('gameArea').textContent = "FATAL ERROR: GameState Missing in gameLogic.start(). Cannot proceed.";
+                    return; 
+                }
+                console.log("GameLogic: Initiating gameLoop.");
+                this.gameLoop(); 
+            }
+        }
+
+        // --- Initialize ---
+        console.log("Stage 5: Classes Defined. Instantiating...");
+        let gameState = new GameState();
+        console.log("GameState instance created.");
+        document.getElementById('gameArea').textContent = "Stage 6: GameState Instantiated. Instantiating Renderer...";
+        let renderer = new AsciiRenderer(gameState);
+        console.log("Renderer instance created.");
+        document.getElementById('gameArea').textContent = "Stage 7: Renderer Instantiated. Instantiating GameLogic...";
+        let gameLogic = new GameLogic(gameState, renderer);
+        console.log("GameLogic instance created.");
+        document.getElementById('gameArea').textContent = "Stage 8: GameLogic Instantiated. Assigning to window...";
+        window.gameLogicInstance = gameLogic; 
+        console.log("window.gameLogicInstance assigned successfully.");
+        document.getElementById('gameArea').textContent = "Stage 9: All Instances Ready. Attempting to call gameLogic.start() via setTimeout...";
+        
+        try {
+            setTimeout(() => { 
+                 if (gameLogic && typeof gameLogic.start === 'function') {
+                    console.log("setTimeout: gameLogic.start is a function. Calling it now.");
+                    gameLogic.start(); 
+                 } else {
+                    let errorMsg = "Error: gameLogic.start is not a function at setTimeout execution!";
+                    console.error(errorMsg, gameLogic);
+                    document.getElementById('gameArea').textContent = errorMsg;
+                 }
+            }, 50); 
+        } catch (e) {
+            console.error("CRITICAL ERROR ON FINAL STARTUP (outer try-catch):", e);
+            document.getElementById('gameArea').innerHTML = `<pre style="color:red; font-size:10px;">CRITICAL STARTUP ERROR (outer):\n${e.stack}</pre>`;
+        }
+    </script>
+    <script src="quoteBanner.js"></script> <!-- Add this line AFTER the main script -->
+</body>
+</html>

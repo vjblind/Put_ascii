@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ASCII Slide Game</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #0f0;
+            font-family: monospace;
+            display: flex;
+            flex-direction: column;
+            /* justify-content: center; */ /* Adjusted for HUD */
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+        }
+        #gameCanvas {
+            white-space: pre;
+            line-height: 1;
+            font-size: 12px;
+            border: 1px solid #0f0; /* Green border */
+            padding: 10px;
+            background-color: #000;
+            width: 80ch;
+            max-width: 100%;
+            box-sizing: border-box;
+        }
+        #hud {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start; /* Align items to the top */
+            width: 80ch; /* Match game canvas width */
+            padding: 5px 10px;
+            background-color: #000;
+            border: 1px solid #0f0;
+            border-bottom: none; 
+            margin-bottom: -1px; /* Overlap border with gameCanvas */
+            box-sizing: border-box;
+            color: #0f0; /* Default HUD text color */
+        }
+        #avatarContainer pre {
+            margin: 0;
+            padding: 0;
+            font-size: 10px; 
+            line-height: 1;
+            color: #0f8; /* Different color for avatar */
+        }
+        #statsContainer {
+            text-align: right;
+        }
+        #statsContainer div {
+            margin-bottom: 2px;
+        }
+        #controls {
+            margin-top: 10px;
+            color: #ccc; /* Slightly lighter text for controls */
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div id="avatarContainer">
+            <pre id="heroAvatarDisplay">Loading Avatar...</pre>
+        </div>
+        <div id="statsContainer">
+            <div id="healthDisplay">HP: ---</div>
+            <div id="scoreDisplay">Score: -----</div>
+            <div id="worldPosDisplay">WorldX: --- Offset: ---</div>
+        </div>
+    </div>
+    <pre id="gameCanvas">Loading Game...</pre>
+    <div id="controls">
+        Controls: Left/Right Arrows = Move, Spacebar = Shoot
+    </div>
+
+    <script>
+        // Game configuration
+        const GAME_SCREEN_WIDTH = 80; // Width of the visible game screen
+        const GAME_SCREEN_HEIGHT = 25; // Height of the visible game screen
+        const GROUND_LEVEL = GAME_SCREEN_HEIGHT - 5; // Y-coordinate of the ground
+
+        // ASCII Assets
+        const ASSETS = {
+            hero: [
+                ' @^@ ',
+                '(___)'
+            ],
+            heroAvatar: [ // New Avatar Art
+                '  .--.  ',
+                ' /_o_\\ \\ ',
+                ' \\ \\_/ / ',
+                '  `---`  ',
+                ' @^@ ',
+                '(___)'
+            ],
+            enemy: [
+                ' <0> ',
+                '[_+_]'
+            ],
+            missile: {
+                right: '>>',
+                left: '<<'
+            },
+            vehicles: [
+                [
+                    '  _______  ',
+                    ' /       \\ ',
+                    '|  CAR    |',
+                    '| (o)_(o) |',
+                    '|_|_____|_|'
+                ],
+                [
+                    '    .--""--.    ',
+                    '   /        \\   ',
+                    '  |  VAN     |  ',
+                    '  (_)-~~-(_)   '
+                ]
+            ],
+            bench: [
+                '|====|',
+                '|    |',
+                '|_BBBB|_'
+            ],
+            buildings: [
+                [
+                    '   /\\      /\\   ',
+                    '  /  \\SHOP/  \\  ',
+                    ' |----####----| ',
+                    ' | [] WINDOW[] | ',
+                    ' | [] DOOR  [] | ',
+                    ' |____________| '
+                ],
+                [
+                    ' .-""""""""-.  ',
+                    '/   OFFICE   \\ ',
+                    '| [] [] [] [] |',
+                    '|  ========  |',
+                    '|____________|'
+                ],
+                [
+                    '  ___________  ',
+                    ' /  HOTEL    \\ ',
+                    '|  []  []  [] |',
+                    '|  =========  |',
+                    '|_____________|'
+                ],
+                [
+                    ' /\\  MALL   /\\  ',
+                    '|  ][  ][  ][  |   ',
+                    '|  ||  ||  ||  |   ',
+                    '|__||__||__||__|   '
+                ]
+            ],
+            clouds: [ // New Cloud Art
+                [
+                    '    .--""--.    ',
+                    '   /        \\   ',
+                    '  (          )  ',
+                    '   `--------`   '
+                ],
+                [
+                    '  .--.     ',
+                    ' (    )    ',
+                    '-(____)-   '
+                ],
+                [
+                    '      .--""--.      ',
+                    '     /        \\     ',
+                    '    (  CLOUD   )    ',
+                    '     `--------`     '
+                ]
+            ],
+            ground: '=',
+            sky: '.',
+            explosion: [
+                '💥BOOM💥', // Using emoji for more visual explosions
+                '🔥CRASH🔥'
+            ]
+        };
+        // Add bigger buildings
+        ASSETS.buildings.push(
+            [
+                '  /----------------\\  ',
+                ' /                  \\ ',
+                '|   SKYSCRAPER INC   |',
+                '| [] [] [] [] [] [] |',
+                '| [] [] [] [] [] [] |',
+                '| [] [] [] [] [] [] |',
+                '| [] [] [] [] [] [] |',
+                '| [] [] [] [] [] [] |',
+                '| [] [] [] [] [] [] |',
+                '|====================|',
+                '|       ENTRANCE     |',
+                '|________DOOR________|'
+            ],
+            [
+                '      .------------.      ',
+                '     /              \\     ',
+                '    |   MEGA TOWER   |    ',
+                '    |----------------|    ',
+                '    |  ||        ||  |    ',
+                '    |  ||   []   ||  |    ',
+                '    |  ||        ||  |    ',
+                '    |  ||   []   ||  |    ',
+                '    |  ||        ||  |    ',
+                '    |  ||   []   ||  |    ',
+                '    |  ||________||  |    ',
+                '    |      /\\      |    ',
+                '    |_____/__\\_____|    '
+            ]
+        );
+
+        class GameState {
+            constructor() {
+                this.worldOffset = 0; // How much the world has scrolled to the left
+                this.hero = {
+                    screenX: 15, // Hero's X position on the screen
+                    worldX: 15,  // Hero's X position in the overall world
+                    y: GROUND_LEVEL - ASSETS.hero.length,
+                    width: ASSETS.hero[0].length,
+                    height: ASSETS.hero.length,
+                    health: 100
+                };
+                this.enemies = [];
+                this.projectiles = [];
+                this.environmentObjects = [];
+                this.clouds = [];
+                this.gameMessage = "";
+                this.score = 0;
+            }
+
+            initialize() {
+                this.worldOffset = 0;
+                this.hero.worldX = 15;
+                this.hero.screenX = 15;
+                this.hero.health = 100;
+                this.score = 0;
+                this.gameMessage = "";
+                this.projectiles = [];
+                this.environmentObjects = [];
+                this.initializeClouds(); // Initialize clouds
+                let currentWorldX = 0;
+                const worldLength = GAME_SCREEN_WIDTH * 10; // World is 10 screens wide
+
+                while (currentWorldX < worldLength) {
+                    const placeType = Math.random();
+                    let assetCollection, assetType, design;
+
+                    if (placeType < 0.6) {
+                        assetCollection = ASSETS.buildings;
+                        assetType = 'building';
+                    } else if (placeType < 0.85) {
+                        assetCollection = ASSETS.vehicles;
+                        assetType = 'vehicle';
+                    } else {
+                        assetCollection = [ASSETS.bench];
+                        assetType = 'bench';
+                    }
+                    design = assetCollection[Math.floor(Math.random() * assetCollection.length)];
+                    
+                    const assetWidth = design[0].length;
+                    const assetHeight = design.length;
+
+                    this.environmentObjects.push({
+                        type: assetType,
+                        x: currentWorldX, // World X
+                        y: GROUND_LEVEL - assetHeight,
+                        width: assetWidth,
+                        height: assetHeight,
+                        design: design
+                    });
+                    currentWorldX += assetWidth + Math.floor(Math.random() * 15) + 5;
+                }
+
+                this.enemies = [];
+                for (let i = 0; i < 20; i++) {
+                    const enemyWorldX = Math.floor(Math.random() * (worldLength - GAME_SCREEN_WIDTH * 2)) + GAME_SCREEN_WIDTH;
+                    this.enemies.push({
+                        x: enemyWorldX, // World X
+                        y: GROUND_LEVEL - ASSETS.enemy.length,
+                        width: ASSETS.enemy[0].length,
+                        height: ASSETS.enemy.length,
+                        health: 50,
+                        shootCooldown: Math.random() * 100 + 80,
+                        isDestroyed: false,
+                        explosionTimer: 0
+                    });
+                }
+            }
+
+            initializeClouds() {
+                this.clouds = [];
+                const numClouds = 5; // Number of clouds
+                const cloudWorldWidth = GAME_SCREEN_WIDTH * 3; // Spread clouds over a wider area than screen
+
+                for (let i = 0; i < numClouds; i++) {
+                    const design = ASSETS.clouds[Math.floor(Math.random() * ASSETS.clouds.length)];
+                    this.clouds.push({
+                        x: Math.floor(Math.random() * cloudWorldWidth), // World X
+                        y: Math.floor(Math.random() * (GROUND_LEVEL - 8)) + 1, // Random Y in sky, above buildings
+                        width: design[0].length,
+                        height: design.length,
+                        design: design,
+                        driftSpeed: (Math.random() * 0.2 + 0.05) * (Math.random() < 0.5 ? 1 : -1) // Slow drift
+                    });
+                }
+            }
+
+
+            drawAssetOnGrid(grid, assetLines, screenX, screenY) {
+                assetLines.forEach((line, h) => {
+                    for (let w = 0; w < line.length; w++) {
+                        const char = line[w];
+                        if (char !== ' ') {
+                            const gx = Math.floor(screenX + w);
+                            const gy = Math.floor(screenY + h);
+                            if (gx >= 0 && gx < GAME_SCREEN_WIDTH && gy >= 0 && gy < GAME_SCREEN_HEIGHT) {
+                                grid[gy][gx] = char;
+                            }
+                        }
+                    }
+                });
+            }
+
+            moveHero(dx) {
+                if (this.gameMessage) return;
+                const scrollThresholdLeft = GAME_SCREEN_WIDTH * 0.25;
+                const scrollThresholdRight = GAME_SCREEN_WIDTH * 0.65;
+                
+                let intendedWorldX = this.hero.worldX + dx;
+                
+                // Try to move hero on screen
+                if (dx > 0) { // Moving right
+                    if (this.hero.screenX < scrollThresholdRight) {
+                        this.hero.screenX = Math.min(this.hero.screenX + dx, scrollThresholdRight);
+                    } else {
+                        this.worldOffset += dx;
+                    }
+                } else if (dx < 0) { // Moving left
+                    if (this.hero.screenX > scrollThresholdLeft) {
+                        this.hero.screenX = Math.max(this.hero.screenX + dx, scrollThresholdLeft);
+                    } else {
+                        this.worldOffset = Math.max(0, this.worldOffset + dx); 
+                    }
+                }
+                this.hero.worldX = this.worldOffset + this.hero.screenX;
+                 // Clamp hero screen position
+                this.hero.screenX = Math.max(0, Math.min(GAME_SCREEN_WIDTH - this.hero.width, this.hero.screenX));
+                // Ensure worldX is consistent if screenX was clamped at world edge
+                if (this.worldOffset === 0) {
+                    this.hero.worldX = this.hero.screenX;
+                }
+            }
+
+            heroShoot() {
+                if (this.gameMessage) return;
+                this.projectiles.push({
+                    x: this.hero.worldX + this.hero.width, // World X
+                    y: this.hero.y + Math.floor(ASSETS.hero.length / 2),
+                    dx: 4,
+                    asset: ASSETS.missile.right,
+                    width: ASSETS.missile.right.length,
+                    friendly: true
+                });
+            }
+
+            enemyShoot(enemy) {
+                if (enemy.isDestroyed || this.gameMessage) return;
+                this.projectiles.push({
+                    x: enemy.x - ASSETS.missile.left.length, // World X
+                    y: enemy.y + Math.floor(ASSETS.enemy.length / 2),
+                    dx: -4,
+                    asset: ASSETS.missile.left,
+                    width: ASSETS.missile.left.length,
+                    friendly: false
+                });
+            }
+
+            updateEnemies() {
+                this.enemies.forEach(enemy => {
+                    if (enemy.isDestroyed) {
+                        if (enemy.explosionTimer > 0) enemy.explosionTimer--;
+                        return;
+                    }
+                    enemy.shootCooldown -= 1;
+                    if (enemy.shootCooldown <= 0) {
+                        const screenX = enemy.x - this.worldOffset;
+                        if (screenX > -enemy.width && screenX < GAME_SCREEN_WIDTH) { // Only shoot if on/near screen
+                            this.enemyShoot(enemy);
+                        }
+                        enemy.shootCooldown = Math.random() * 150 + 100;
+                    }
+                });
+            }
+
+            updateProjectiles() {
+                this.projectiles = this.projectiles.filter(p => {
+                    if (p.isExplosion) {
+                        p.explosionTimer--;
+                        return p.explosionTimer > 0;
+                    }
+                    p.x += p.dx; // Update world X
+                    const screenX = p.x - this.worldOffset;
+                    return screenX > -p.width && screenX < GAME_SCREEN_WIDTH; // Keep if on/near screen
+                });
+            }
+
+            updateClouds() {
+                const cloudWorldWidth = GAME_SCREEN_WIDTH * 3; // Match initialization spread
+                this.clouds.forEach(cloud => {
+                    cloud.x += cloud.driftSpeed;
+
+                    // Simple wrapping logic for clouds
+                    if (cloud.driftSpeed > 0 && cloud.x - this.worldOffset > GAME_SCREEN_WIDTH + cloud.width) {
+                        cloud.x = this.worldOffset - cloud.width - Math.random() * 50; // Reappear on the left
+                    } else if (cloud.driftSpeed < 0 && cloud.x - this.worldOffset < -cloud.width * 2) {
+                        cloud.x = this.worldOffset + GAME_SCREEN_WIDTH + Math.random() * 50; // Reappear on the right
+                    }
+                });
+            }
+
+            checkCollisions() {
+                if (this.gameMessage) return;
+
+                // Player Projectiles vs Enemies
+                this.projectiles.forEach((p, pi) => {
+                    if (!p.friendly || p.isExplosion) return;
+                    this.enemies.forEach((e) => {
+                        if (e.isDestroyed || e.explosionTimer > 0) return;
+                        if (p.x < e.x + e.width && p.x + p.width > e.x &&
+                            p.y < e.y + e.height && p.y + ASSETS.missile.right.length > e.y) { // Assuming missile is 1 line high
+                            
+                            e.health -= 25;
+                            this.projectiles.splice(pi, 1); // Remove projectile
+                            this.score += 10;
+
+                            if (e.health <= 0) {
+                                e.isDestroyed = true;
+                                e.explosionTimer = 10; // Explosion lasts for 10 ticks
+                                this.score += 50;
+                            }
+                            return; 
+                        }
+                    });
+                });
+
+                // Enemy Projectiles vs Hero
+                this.projectiles.forEach((p, pi) => {
+                    if (p.friendly || p.isExplosion) return;
+                    const heroWorldBox = { x: this.hero.worldX, y: this.hero.y, width: this.hero.width, height: this.hero.height };
+                    if (p.x < heroWorldBox.x + heroWorldBox.width && p.x + p.width > heroWorldBox.x &&
+                        p.y < heroWorldBox.y + heroWorldBox.height && p.y + ASSETS.missile.left.length > heroWorldBox.y) {
+                        
+                        this.hero.health -= 10;
+                        this.projectiles.splice(pi, 1); 
+
+                        if (this.hero.health <= 0) {
+                            this.hero.health = 0;
+                            this.gameMessage = "GAME OVER! Press R to Restart";
+                        }
+                    }
+                });
+            }
+
+            render() {
+                const viewportGrid = Array(GAME_SCREEN_HEIGHT).fill(null).map(() => Array(GAME_SCREEN_WIDTH).fill(' '));
+
+                // Sky
+                for (let r = 0; r < GROUND_LEVEL -1; r++) {
+                    for (let c = 0; c < GAME_SCREEN_WIDTH; c++) {
+                        if (Math.random() < 0.01) viewportGrid[r][c] = ASSETS.sky;
+                    }
+                }
+                
+                // Clouds (drawn before buildings)
+                this.clouds.forEach(cloud => {
+                    const screenX = cloud.x - this.worldOffset;
+                    if (screenX + cloud.width >= 0 && screenX < GAME_SCREEN_WIDTH) {
+                        this.drawAssetOnGrid(viewportGrid, cloud.design, screenX, cloud.y);
+                    }
+                });
+
+                // Ground
+                for (let x = 0; x < GAME_SCREEN_WIDTH; x++) {
+                    viewportGrid[GROUND_LEVEL][x] = ASSETS.ground;
+                }
+
+                // Environment Objects
+                this.environmentObjects.forEach(obj => {
+                    const screenX = obj.x - this.worldOffset;
+                    if (screenX + obj.width >= 0 && screenX < GAME_SCREEN_WIDTH) {
+                        this.drawAssetOnGrid(viewportGrid, obj.design, screenX, obj.y);
+                    }
+                });
+
+                // Enemies and their explosions
+                this.enemies.forEach(enemy => {
+                    const screenX = enemy.x - this.worldOffset;
+                    if (enemy.isDestroyed && enemy.explosionTimer > 0) {
+                        const explosionArt = ASSETS.explosion[Math.floor(Math.random() * ASSETS.explosion.length)];
+                        if (screenX + explosionArt.length >=0 && screenX < GAME_SCREEN_WIDTH) {
+                             this.drawAssetOnGrid(viewportGrid, [explosionArt], screenX, enemy.y);
+                        }
+                    } else if (!enemy.isDestroyed) {
+                        if (screenX + enemy.width >= 0 && screenX < GAME_SCREEN_WIDTH) {
+                            this.drawAssetOnGrid(viewportGrid, ASSETS.enemy, screenX, enemy.y);
+                        }
+                    }
+                });
+                
+                // Hero
+                this.drawAssetOnGrid(viewportGrid, ASSETS.hero, this.hero.screenX, this.hero.y);
+
+                // Projectiles
+                this.projectiles.forEach(p => {
+                    if (p.isExplosion) return; // Handled by enemy explosion drawing
+                    const screenX = p.x - this.worldOffset;
+                     if (screenX + p.width >= 0 && screenX < GAME_SCREEN_WIDTH) {
+                        this.drawAssetOnGrid(viewportGrid, [p.asset], screenX, p.y);
+                    }
+                });
+
+                if (this.gameMessage) {
+                    const msg = this.gameMessage;
+                    const startX = Math.floor((GAME_SCREEN_WIDTH - msg.length) / 2);
+                    const startY = Math.floor(GAME_SCREEN_HEIGHT / 2);
+                    for(let i = 0; i < msg.length; i++) {
+                        if (startX + i >= 0 && startX + i < GAME_SCREEN_WIDTH && startY >=0 && startY < GAME_SCREEN_HEIGHT) {
+                            viewportGrid[startY][startX + i] = msg[i];
+                        }
+                    }
+                }
+                
+                return viewportGrid.map(row => row.join('')).join('\n');
+            }
+        }
+
+        // --- Game Setup ---
+        const gameCanvas = document.getElementById('gameCanvas');
+        let gameState = new GameState();
+        let gameLoopInterval = null;
+        
+        // HUD Elements
+        const heroAvatarDisplay = document.getElementById('heroAvatarDisplay');
+        const healthDisplay = document.getElementById('healthDisplay');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const worldPosDisplay = document.getElementById('worldPosDisplay');
+
+        function startGame() {
+            gameState.initialize();
+            if (gameLoopInterval) clearInterval(gameLoopInterval);
+            gameLoopInterval = setInterval(mainGameLoop, 100); // 10 FPS
+            renderGame();
+        }
+
+        function mainGameLoop() {
+            if (gameState.gameMessage && gameState.hero.health <=0) { // Only pause loop if game over
+                renderGame(); // Render game over message
+                return;
+            }
+            gameState.updateClouds();
+            gameState.updateEnemies();
+            gameState.updateProjectiles();
+            gameState.checkCollisions();
+            renderGame();
+        }
+
+        function renderGame() {
+            gameCanvas.textContent = gameState.render();
+
+            // Update HUD elements
+            heroAvatarDisplay.textContent = ASSETS.heroAvatar.join('\n');
+            healthDisplay.textContent = `HP: ${gameState.hero.health.toString().padEnd(3)}`;
+            scoreDisplay.textContent = `Score: ${gameState.score.toString().padStart(5, '0')}`;
+            worldPosDisplay.textContent = `WorldX: ${Math.floor(gameState.hero.worldX)} Offset: ${Math.floor(gameState.worldOffset)}`;
+        }
+
+        // Keyboard controls
+        document.addEventListener('keydown', (e) => {
+            if (gameState.gameMessage && e.key.toLowerCase() === 'r') {
+                startGame();
+                return;
+            }
+            if (gameState.gameMessage) return; // Don't process game controls if message is up
+
+            switch(e.key) {
+                case 'ArrowRight':
+                    gameState.moveHero(2);
+                    break;
+                case 'ArrowLeft':
+                    gameState.moveHero(-2);
+                    break;
+                case ' ': // Spacebar
+                    e.preventDefault(); // Prevent page scroll
+                    gameState.heroShoot();
+                    break;
+            }
+            renderGame(); // Re-render immediately on input for responsiveness
+        });
+
+        // Initial game start
+        startGame();
+
+    </script>
+</body>
+</html>
